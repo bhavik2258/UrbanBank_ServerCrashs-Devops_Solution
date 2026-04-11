@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import logging
 import os
+import asyncio
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 
@@ -41,8 +42,21 @@ async def collect_branch_metrics() -> None:
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     logger.info("Starting UrbanBank backend initialization")
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
+    
+    max_retries = 5
+    for attempt in range(1, max_retries + 1):
+        try:
+            async with engine.begin() as conn:
+                await conn.run_sync(Base.metadata.create_all)
+            logger.info("Successfully connected to the database and created tables!")
+            break
+        except Exception as e:
+            logger.warning(f"Database connection failed on attempt {attempt}/{max_retries}. Retrying in 5 seconds...")
+            if attempt == max_retries:
+                logger.error("Could not connect to the database after maximum retries.")
+                raise e
+            await asyncio.sleep(5)
+            
     async with AsyncSessionLocal() as session:
         await seed_database(session)
     scheduler.add_job(
