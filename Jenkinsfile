@@ -1,111 +1,76 @@
 pipeline {
-    agent any
-
-    // Best Practice: Use Parameters so you can inject dynamic IP addresses or credentials without editing code
-    parameters {
-        string(name: 'MINIKUBE_IP', defaultValue: '192.168.49.2', description: 'IP address of the Minikube cluster')
-        string(name: 'DOCKER_REGISTRY', defaultValue: 'docker.io', description: 'Default Docker Registry')
+    // Force the pipeline to run ONLY on the Docker-in-Docker agent node
+    agent { 
+        label 'docker-agent' 
     }
 
     environment {
         APP_NAME = 'urbanbank'
-        // Using Jenkins build ID directly for tags creates unique, traceable image tags
         IMAGE_TAG = "${BUILD_NUMBER}"
+        // Set paths assuming the repo is checked out
     }
 
     stages {
-        stage('Checkout') {
+        stage('Clone Repository') {
             steps {
-                echo 'Checking out code from Git...'
+                echo 'Checking out code from GitHub...'
                 checkout scm
             }
         }
 
-        stage('Install Dependencies & Tests') {
+        stage('Install & Test') {
             parallel {
-                stage('Backend') {
+                stage('Backend (Python)') {
                     steps {
-                        echo 'Setting up Python Environment...'
-                        // Best Practice: Fail the build if tests fail (removed the '|| echo' suppression)
+                        echo 'Testing Python Backend...'
                         sh '''
                             cd Backend
                             pip install -r requirements.txt
-                            # pytest tests/
+                            # pytest tests/  # Uncomment when tests are written
                         '''
                     }
                 }
-                stage('Frontend') {
+                stage('Frontend (React)') {
                     steps {
-                        echo 'Setting up Node Environment...'
+                        echo 'Testing React Frontend...'
                         sh '''
                             cd Frontend
                             npm install
                             npm run build
-                            # npm test
+                            # npm test      # Uncomment when tests are written
                         '''
                     }
                 }
-            }
-        }
-
-        stage('Code Quality Check') {
-            steps {
-                echo 'Skipping SonarQube Scanner (Placeholder)...'
             }
         }
 
         stage('Build Docker Images') {
             steps {
-                echo 'Building Backend, Frontend...'
+                echo 'Building Docker Images...'
                 sh "docker build -t ${APP_NAME}-backend:${IMAGE_TAG} ./Backend"
                 sh "docker build -t ${APP_NAME}-frontend:${IMAGE_TAG} ./Frontend"
             }
         }
 
-        stage('Tag as Latest') {
+        stage('Deploy / Restart') {
             steps {
-                echo 'Tagging images as latest...'
-                sh "docker tag ${APP_NAME}-backend:${IMAGE_TAG} ${APP_NAME}-backend:latest"
-                sh "docker tag ${APP_NAME}-frontend:${IMAGE_TAG} ${APP_NAME}-frontend:latest"
-            }
-        }
-
-        stage('Deploy to Minikube') {
-            steps {
-                echo 'Deploying to local Minikube...'
-                // Best Practice: Use standard kubectl commands assuming a k8s directory for configurations
-                sh '''
-                    if [ -d "k8s" ]; then
-                        kubectl apply -f k8s/
-                        kubectl set image deployment/backend backend=${APP_NAME}-backend:${IMAGE_TAG}
-                        kubectl set image deployment/frontend frontend=${APP_NAME}-frontend:${IMAGE_TAG}
-                    else
-                        echo "No k8s directory found. Please create one with your deployment yaml files!"
-                        exit 1
-                    fi
-                '''
-            }
-        }
-
-        stage('Health Check') {
-            steps {
-                echo 'Running Health Check...'
-                // Using parameterized MINIKUBE_IP
-                sh "curl -s -o /dev/null -w '%{http_code}' http://${params.MINIKUBE_IP}:30000/health | grep 200"
+                echo 'Deploying application locally via Docker Compose...'
+                // Since this runs on the agent with docker access, we can deploy it directly
+                sh 'docker compose down || true'
+                sh 'docker compose up -d --build'
             }
         }
     }
 
     post {
         always {
-            echo 'Pipeline execution finished. Cleaning up workspace...'
             cleanWs()
         }
         success {
-            echo "✅ Pipeline #${BUILD_NUMBER} completed successfully!"
+            echo "✅ UrbanBank Pipeline #${BUILD_NUMBER} completed successfully!"
         }
         failure {
-            echo "❌ Pipeline #${BUILD_NUMBER} failed! Check Jenkins logs."
+            echo "❌ UrbanBank Pipeline #${BUILD_NUMBER} failed!"
         }
     }
 }
