@@ -1,0 +1,56 @@
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { BrowserRouter, Route, Routes, Navigate, Outlet } from "react-router-dom";
+import { Toaster as Sonner } from "@/components/ui/sonner";
+import { Toaster } from "@/components/ui/toaster";
+import { TooltipProvider } from "@/components/ui/tooltip";
+import { ThemeProvider } from "@/components/theme-provider";
+import Navbar from "@/components/Navbar";
+import Dashboard from "@/pages/Dashboard";
+import BranchDetail from "@/pages/BranchDetail";
+import Alerts from "@/pages/Alerts";
+import Incidents from "@/pages/Incidents";
+import NotFound from "@/pages/NotFound";
+import Login from "@/pages/Login";
+
+const queryClient = new QueryClient();
+
+const ProtectedRoute = () => {
+  const isAuthenticated = sessionStorage.getItem("isAuthenticated") === "true";
+  if (!isAuthenticated) {
+    return <Navigate to="/login" replace />;
+  }
+  return (
+    <div className="min-h-screen bg-slate-50/50 dark:bg-slate-950 flex flex-col">
+      <div className="absolute inset-0 bg-grid-slate-200/50 [mask-image:linear-gradient(0deg,white,rgba(255,255,255,0.6))] dark:bg-grid-slate-800/50 dark:[mask-image:linear-gradient(0deg,rgba(0,0,0,0.8),rgba(0,0,0,0.4))] pointer-events-none -z-10" />
+      <Navbar />
+      <main className="flex-1 w-full max-w-[1400px] mx-auto p-4 md:p-6 lg:p-8 animate-in fade-in duration-500 relative z-0">
+        <Outlet />
+      </main>
+    </div>
+  );
+};
+
+const App = () => (
+  <ThemeProvider defaultTheme="system" storageKey="opswatch-theme">
+    <QueryClientProvider client={queryClient}>
+      <TooltipProvider>
+        <Toaster />
+        <Sonner />
+        <BrowserRouter>
+          <Routes>
+            <Route path="/login" element={<Login />} />
+            <Route element={<ProtectedRoute />}>
+              <Route path="/" element={<Dashboard />} />
+              <Route path="/branch/:id" element={<BranchDetail />} />
+              <Route path="/alerts" element={<Alerts />} />
+              <Route path="/incidents" element={<Incidents />} />
+              <Route path="*" element={<NotFound />} />
+            </Route>
+          </Routes>
+        </BrowserRouter>
+      </TooltipProvider>
+    </QueryClientProvider>
+  </ThemeProvider>
+);
+
+export default App;
