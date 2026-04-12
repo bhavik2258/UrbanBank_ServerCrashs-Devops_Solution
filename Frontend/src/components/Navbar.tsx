@@ -1,8 +1,10 @@
+import { useState } from "react";
 import { NavLink, useNavigate } from "react-router-dom";
 import { Activity, AlertTriangle, LayoutDashboard, FileText, User, LogOut, Settings } from "lucide-react";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Button } from "@/components/ui/button";
 import { ThemeToggle } from "@/components/ThemeToggle";
+import { SettingsDialog } from "@/components/SettingsDialog";
 
 const links = [
   { to: "/", label: "Dashboard", icon: LayoutDashboard },
@@ -12,6 +14,7 @@ const links = [
 
 const Navbar = () => {
   const navigate = useNavigate();
+  const [settingsOpen, setSettingsOpen] = useState(false);
 
   const handleLogout = () => {
     sessionStorage.removeItem("isAuthenticated");
@@ -19,6 +22,7 @@ const Navbar = () => {
   };
 
   return (
+    <>
     <nav className="border-b border-border bg-card/80 backdrop-blur-sm sticky top-0 z-50 shadow-sm">
       <div className="container flex h-16 items-center justify-between">
         <div className="flex items-center gap-6">
@@ -67,7 +71,7 @@ const Navbar = () => {
             <DropdownMenuContent align="end" className="w-56">
               <DropdownMenuLabel>My Account</DropdownMenuLabel>
               <DropdownMenuSeparator />
-              <DropdownMenuItem className="cursor-pointer gap-2">
+              <DropdownMenuItem onClick={() => setSettingsOpen(true)} className="cursor-pointer gap-2">
                 <Settings className="h-4 w-4 text-muted-foreground" /> Account Settings
               </DropdownMenuItem>
               <DropdownMenuSeparator />
@@ -79,6 +83,8 @@ const Navbar = () => {
         </div>
       </div>
     </nav>
+    <SettingsDialog open={settingsOpen} onOpenChange={setSettingsOpen} />
+    </>
   );
 };
 

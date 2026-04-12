@@ -14,6 +14,7 @@ export interface ServiceStatus {
 export interface Branch {
   id: string;
   name: string;
+  bank_name: string;
   location: string;
   status: "healthy" | "warning" | "critical";
   metrics: BranchMetrics;
@@ -68,10 +69,12 @@ interface BackendMetric {
 interface BackendBranch {
   id: number;
   name: string;
+  bank_name: string;
   ip_address: string;
   location: string;
   status: BackendBranchStatus;
   created_at: string;
+  uptime_percent: number;
   latest_metric: BackendMetric | null;
 }
 
@@ -110,6 +113,13 @@ interface BackendDashboardSummary {
   active_alerts: number;
   incidents_today: number;
   avg_uptime_percent: number;
+}
+
+interface DashboardStreamCallbacks {
+  onConnected?: () => void;
+  onMetricsUpdated?: () => void;
+  onDisconnected?: () => void;
+  onError?: (event: Event) => void;
 }
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:8000";
@@ -157,20 +167,12 @@ async function getBranchNameMap(): Promise<Map<number, string>> {
   return new Map<number, string>(branches.map((branch) => [branch.id, branch.name]));
 }
 
-async function calculateUptimePercent(branchId: number): Promise<number> {
-  const history = await request<BackendMetric[]>(`/metrics/${branchId}/history`);
-  if (!history.length) {
-    return 0;
-  }
-  const serviceUpCount = history.filter((metric) => metric.core_banking_service_up).length;
-  return Number(((serviceUpCount / history.length) * 100).toFixed(2));
-}
-
-function mapBranch(branch: BackendBranch, uptimePercent: number): Branch {
+function mapBranch(branch: BackendBranch): Branch {
   const metric = branch.latest_metric;
   return {
     id: String(branch.id),
     name: branch.name,
+    bank_name: branch.bank_name,
     location: branch.location,
     status: branch.status,
     metrics: {
@@ -188,7 +190,7 @@ function mapBranch(branch: BackendBranch, uptimePercent: number): Branch {
         status: metric?.postgres_db_up === false ? "DOWN" : "UP",
       },
     ],
-    uptimePercent,
+    uptimePercent: Number((branch.uptime_percent ?? 100).toFixed(2)),
   };
 }
 
@@ -229,19 +231,14 @@ function toBranchId(value: string): number {
 
 export const fetchBranches = async (): Promise<Branch[]> => {
   const backendBranches = await request<BackendBranch[]>("/branches");
-  const uptimeValues = await Promise.all(
-    backendBranches.map((branch) => calculateUptimePercent(branch.id))
-  );
-
-  return backendBranches.map((branch, index) => mapBranch(branch, uptimeValues[index]));
+  return backendBranches.map((branch) => mapBranch(branch));
 };
 
 export const fetchBranch = async (id: string): Promise<Branch | undefined> => {
   const branchId = toBranchId(id);
   try {
     const backendBranch = await request<BackendBranch>(`/branches/${branchId}`);
-    const uptimePercent = await calculateUptimePercent(backendBranch.id);
-    return mapBranch(backendBranch, uptimePercent);
+    return mapBranch(backendBranch);
   } catch (error) {
     if (error instanceof Error && error.message.includes("404")) {
       return undefined;
@@ -287,11 +284,12 @@ export const resolveAlert = async (alertId: string): Promise<void> => {
 };
 
 export const fetchIncidents = async (): Promise<Incident[]> => {
-  const [incidentPage, branchNameMap] = await Promise.all([
-    request<BackendIncidentPage>("/incidents?page=1&page_size=100"),
+  const [incidentResponse, branchNameMap] = await Promise.all([
+    request<BackendIncidentPage | BackendIncident[]>("/incidents?page=1&page_size=100"),
     getBranchNameMap(),
   ]);
-  return incidentPage.items.map((incident) =>
+  const incidents = Array.isArray(incidentResponse) ? incidentResponse : incidentResponse.items;
+  return incidents.map((incident) =>
     mapIncident(incident, branchNameMap.get(incident.branch_id) ?? `Branch ${incident.branch_id}`)
   );
 };
@@ -307,12 +305,38 @@ export const fetchIncidentsByBranch = async (branchId: string): Promise<Incident
 
 export const simulateFailure = async (branchId: string): Promise<void> => {
   const id = toBranchId(branchId);
-  await request(`/simulate/failure/${id}`, { method: "POST" });
+  await request(`/simulate/incident/${id}`, { method: "POST" });
 };
 
 export const triggerHeal = async (branchId: string): Promise<void> => {
   const id = toBranchId(branchId);
   await request(`/simulate/heal/${id}`, { method: "POST" });
+};
+
+export const subscribeDashboardUpdates = (callbacks: DashboardStreamCallbacks): (() => void) => {
+  const source = new EventSource(`${API_BASE_URL}/dashboard/stream`);
+  let closedByClient = false;
+
+  source.addEventListener("connected", () => {
+    callbacks.onConnected?.();
+  });
+
+  source.addEventListener("metrics_updated", () => {
+    callbacks.onMetricsUpdated?.();
+  });
+
+  source.onerror = (event) => {
+    callbacks.onError?.(event);
+    if (!closedByClient) {
+      callbacks.onDisconnected?.();
+    }
+  };
+
+  return () => {
+    closedByClient = true;
+    source.close();
+    callbacks.onDisconnected?.();
+  };
 };
 
 export const getDashboardSummary = async () => {

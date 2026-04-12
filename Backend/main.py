@@ -3,13 +3,16 @@ from __future__ import annotations
 import logging
 import os
 import asyncio
+import json
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
+from typing import Any, AsyncIterator
 
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from dotenv import load_dotenv
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import StreamingResponse
 from sqlalchemy import select
 
 from crud import ensure_branch_state, generate_branch_metric, seed_database
@@ -26,6 +29,43 @@ logging.basicConfig(
 logger = logging.getLogger("urbanbank-backend")
 
 scheduler = AsyncIOScheduler(timezone="UTC")
+METRIC_COLLECTION_INTERVAL_SECONDS = int(os.getenv("METRIC_COLLECTION_INTERVAL_SECONDS", "10"))
+
+
+class DashboardUpdateBroker:
+    """In-memory pub/sub for dashboard update events."""
+
+    def __init__(self) -> None:
+        self._subscribers: set[asyncio.Queue[dict[str, Any]]] = set()
+        self._lock = asyncio.Lock()
+
+    async def subscribe(self) -> asyncio.Queue[dict[str, Any]]:
+        queue: asyncio.Queue[dict[str, Any]] = asyncio.Queue(maxsize=1)
+        async with self._lock:
+            self._subscribers.add(queue)
+        return queue
+
+    async def unsubscribe(self, queue: asyncio.Queue[dict[str, Any]]) -> None:
+        async with self._lock:
+            self._subscribers.discard(queue)
+
+    async def publish(self, payload: dict[str, Any]) -> None:
+        async with self._lock:
+            subscribers = list(self._subscribers)
+
+        for queue in subscribers:
+            if queue.full():
+                try:
+                    queue.get_nowait()
+                except asyncio.QueueEmpty:
+                    pass
+            try:
+                queue.put_nowait(payload)
+            except asyncio.QueueFull:
+                pass
+
+
+dashboard_updates = DashboardUpdateBroker()
 
 
 async def collect_branch_metrics() -> None:
@@ -37,6 +77,12 @@ async def collect_branch_metrics() -> None:
             await generate_branch_metric(session, branch)
             await ensure_branch_state(session, branch)
         logger.info("Generated new metric readings for %s branches", len(branch_rows))
+        await dashboard_updates.publish(
+            {
+                "generated_at": datetime.now(timezone.utc).isoformat(),
+                "branch_count": len(branch_rows),
+            }
+        )
 
 
 @asynccontextmanager
@@ -62,7 +108,7 @@ async def lifespan(app: FastAPI):
     scheduler.add_job(
         collect_branch_metrics,
         "interval",
-        seconds=30,
+        seconds=METRIC_COLLECTION_INTERVAL_SECONDS,
         id="branch-metric-collector",
         replace_existing=True,
         max_instances=1,
@@ -113,3 +159,33 @@ async def health() -> dict[str, str]:
         "status": "healthy",
         "timestamp": datetime.now(timezone.utc).isoformat(),
     }
+
+
+@app.get("/dashboard/stream", tags=["metrics"])
+async def dashboard_stream() -> StreamingResponse:
+    queue = await dashboard_updates.subscribe()
+
+    async def event_generator() -> AsyncIterator[str]:
+        try:
+            yield (
+                "event: connected\n"
+                f"data: {json.dumps({'interval_seconds': METRIC_COLLECTION_INTERVAL_SECONDS})}\n\n"
+            )
+            while True:
+                try:
+                    payload = await asyncio.wait_for(queue.get(), timeout=20)
+                    yield f"event: metrics_updated\ndata: {json.dumps(payload)}\n\n"
+                except asyncio.TimeoutError:
+                    yield "event: keepalive\ndata: {}\n\n"
+        finally:
+            await dashboard_updates.unsubscribe(queue)
+
+    return StreamingResponse(
+        event_generator(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+        },
+    )

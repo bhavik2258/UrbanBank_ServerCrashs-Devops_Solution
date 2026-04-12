@@ -31,6 +31,7 @@ class MetricRead(MetricBase):
 
 class BranchCreate(BaseModel):
     name: str = Field(min_length=2, max_length=120)
+    bank_name: str = Field(default="UrbanBank", min_length=2, max_length=120)
     ip_address: str = Field(min_length=7, max_length=45)
     location: str = Field(min_length=2, max_length=120)
     status: BranchStatus = BranchStatus.healthy
@@ -41,10 +42,12 @@ class BranchRead(BaseModel):
 
     id: int
     name: str
+    bank_name: str
     ip_address: str
     location: str
     status: BranchStatus
     created_at: datetime
+    uptime_percent: float = Field(default=100.0, ge=0, le=100)
     latest_metric: MetricRead | None = None
 
 

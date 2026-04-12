@@ -28,7 +28,7 @@ trap cleanup SIGINT SIGTERM
 
 echo "--------------------------------------------------------"
 echo "✅ Local development services are running!"
-echo "   - Frontend: http://localhost:5173 (usually)"
+echo "   - Frontend: http://localhost:8080"
 echo "   - Backend:  http://localhost:8000"
 echo "   - Database: localhost:5432"
 echo ""
