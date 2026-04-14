@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState, useTransition } from "react";
 import { toast } from "sonner";
 import { Server, AlertTriangle, TrendingUp, Building2 } from "lucide-react";
 import BranchCard from "@/components/BranchCard";
@@ -16,14 +16,23 @@ import { Label } from "@/components/ui/label";
 import { hasPermission } from "@/lib/auth";
 
 const Dashboard = () => {
+  const INITIAL_VISIBLE_BRANCHES = 24;
   const [allBranches, setAllBranches] = useState<Branch[]>([]);
   const [selectedBank, setSelectedBank] = useState<string>("");
   const [summary, setSummary] = useState<{ totalBranches: number; activeAlerts: number; incidentsToday: number; avgUptime: number } | null>(null);
   const [loading, setLoading] = useState(true);
   const [streamConnected, setStreamConnected] = useState(false);
+  const [visibleBranchCount, setVisibleBranchCount] = useState(INITIAL_VISIBLE_BRANCHES);
+  const [isSwitchingBank, startBankTransition] = useTransition();
   const canOperate = hasPermission("simulate_incident") && hasPermission("trigger_heal");
 
-  const load = async () => {
+  const handleBankChange = useCallback((value: string) => {
+    startBankTransition(() => {
+      setSelectedBank(value);
+    });
+  }, []);
+
+  const load = useCallback(async () => {
     try {
       const [b, s] = await Promise.all([fetchBranches(), getDashboardSummary()]);
       setAllBranches(b);
@@ -34,7 +43,7 @@ const Dashboard = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
   useEffect(() => {
     let mounted = true;
@@ -95,50 +104,67 @@ const Dashboard = () => {
       stopPolling();
       unsubscribe();
     };
-  }, []);
+  }, [load]);
 
-  const handleFailure = async (id: string) => {
+  const handleFailure = useCallback(async (id: string) => {
     if (!canOperate) {
       toast.info("Read-only role", { description: "Your role does not allow incident simulation." });
       return;
     }
     await simulateFailure(id);
     toast.error("🔴 Failure simulated", { description: `Branch ${id} is now in critical state` });
-    load();
-  };
+    void load();
+  }, [canOperate, load]);
 
-  const handleHeal = async (id: string) => {
+  const handleHeal = useCallback(async (id: string) => {
     if (!canOperate) {
       toast.info("Read-only role", { description: "Your role does not allow heal operations." });
       return;
     }
     await triggerHeal(id);
     toast.success("🟢 Auto-heal triggered", { description: `Branch ${id} has been restored` });
-    load();
-  };
+    void load();
+  }, [canOperate, load]);
 
-  // Get unique bank names for the dropdown
-  const uniqueBanks = Array.from(new Set(allBranches.map((b) => b.bank_name))).sort();
+  const uniqueBanks = useMemo(
+    () => Array.from(new Set(allBranches.map((branch) => branch.bank_name))).sort(),
+    [allBranches]
+  );
 
   useEffect(() => {
     if (!selectedBank && uniqueBanks.length > 0) {
       setSelectedBank(uniqueBanks[0]);
     }
   }, [selectedBank, uniqueBanks]);
-  
-  // Filter branches based on selected bank
-  const filteredBranches = selectedBank
-    ? allBranches.filter((b) => b.bank_name === selectedBank)
-    : allBranches;
 
-  const stats = summary
-    ? [
-        { label: "Total Monitored Banks", value: uniqueBanks.length, icon: Building2 },
-        { label: "Total Monitored Endpoints", value: summary.totalBranches, icon: Server },
-        { label: "Active Critical Alerts", value: summary.activeAlerts, icon: AlertTriangle },
-        { label: "Avg System Uptime", value: `${summary.avgUptime}%`, icon: TrendingUp },
-      ]
-    : [];
+  useEffect(() => {
+    setVisibleBranchCount(INITIAL_VISIBLE_BRANCHES);
+  }, [selectedBank]);
+
+  const filteredBranches = useMemo(
+    () => (selectedBank ? allBranches.filter((branch) => branch.bank_name === selectedBank) : allBranches),
+    [allBranches, selectedBank]
+  );
+
+  const displayedBranches = useMemo(
+    () => filteredBranches.slice(0, visibleBranchCount),
+    [filteredBranches, visibleBranchCount]
+  );
+
+  const hasMoreBranches = displayedBranches.length < filteredBranches.length;
+
+  const stats = useMemo(
+    () =>
+      summary
+        ? [
+            { label: "Total Monitored Banks", value: uniqueBanks.length, icon: Building2 },
+            { label: "Total Monitored Endpoints", value: summary.totalBranches, icon: Server },
+            { label: "Active Critical Alerts", value: summary.activeAlerts, icon: AlertTriangle },
+            { label: "Avg System Uptime", value: `${summary.avgUptime}%`, icon: TrendingUp },
+          ]
+        : [],
+    [summary, uniqueBanks.length]
+  );
 
   return (
     <div className="container py-6 space-y-6">
@@ -151,7 +177,7 @@ const Dashboard = () => {
         
         <div className="flex items-center gap-3 bg-muted/50 p-2 rounded-lg border w-full md:w-auto">
           <Label className="whitespace-nowrap font-medium text-sm text-foreground/80 pl-2">Select Bank:</Label>
-          <Select value={selectedBank} onValueChange={setSelectedBank}>
+          <Select value={selectedBank} onValueChange={handleBankChange}>
             <SelectTrigger className="w-[280px] bg-background">
               <SelectValue placeholder="Choose A Bank..." />
             </SelectTrigger>
@@ -166,6 +192,7 @@ const Dashboard = () => {
 
       {/* Summary Bar */}
       <h2 className="text-xl font-semibold tracking-tight">{selectedBank || "Global"} Infrastructure Overview</h2>
+      {isSwitchingBank ? <p className="text-xs text-muted-foreground">Optimizing view update...</p> : null}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         {loading
           ? Array.from({ length: 4 }).map((_, i) => (
@@ -193,7 +220,7 @@ const Dashboard = () => {
         <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-5">
           {loading
             ? Array.from({ length: 6 }).map((_, i) => <CardSkeleton key={i} />)
-            : filteredBranches.map(b => (
+            : displayedBranches.map((b) => (
                 <BranchCard
                   key={b.id}
                   branch={b}
@@ -211,6 +238,18 @@ const Dashboard = () => {
             </div>
           )}
         </div>
+
+        {hasMoreBranches && !loading && (
+          <div className="mt-4 flex justify-center">
+            <button
+              type="button"
+              className="inline-flex items-center rounded-md border px-4 py-2 text-sm font-medium hover:bg-accent"
+              onClick={() => setVisibleBranchCount((count) => count + INITIAL_VISIBLE_BRANCHES)}
+            >
+              Show More Branches ({filteredBranches.length - displayedBranches.length} remaining)
+            </button>
+          </div>
+        )}
       </div>
 
       <div className="pt-8 text-center border-t border-border/50">

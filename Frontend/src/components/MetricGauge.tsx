@@ -1,4 +1,4 @@
-import { Progress } from "@/components/ui/progress";
+import { memo } from "react";
 
 interface MetricGaugeProps {
   label: string;
@@ -26,4 +26,4 @@ const MetricGauge = ({ label, value }: MetricGaugeProps) => (
   </div>
 );
 
-export default MetricGauge;
+export default memo(MetricGauge);

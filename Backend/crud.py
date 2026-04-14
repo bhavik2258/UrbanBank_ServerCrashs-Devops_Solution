@@ -280,6 +280,41 @@ async def ensure_branch_state(session: AsyncSession, branch: Branch) -> None:
         session.add(branch)
         await session.commit()
 
+
+async def auto_resolve_recovered_metric_alerts(
+    session: AsyncSession,
+    branch: Branch,
+    cpu_usage: float,
+    disk_usage: float,
+) -> int:
+    """Automatically resolve warning alerts after sustained metric recovery."""
+    active_alerts_result = await session.execute(
+        select(Alert).where(
+            Alert.branch_id == branch.id,
+            Alert.is_resolved.is_(False),
+            Alert.alert_type.in_([AlertType.high_cpu.value, AlertType.disk_full.value]),
+        )
+    )
+    active_alerts = list(active_alerts_result.scalars().all())
+
+    resolved_count = 0
+    resolved_at = datetime.now(timezone.utc)
+    for alert in active_alerts:
+        cpu_recovered = alert.alert_type == AlertType.high_cpu.value and cpu_usage <= 70.0
+        disk_recovered = alert.alert_type == AlertType.disk_full.value and disk_usage <= 85.0
+        if not (cpu_recovered or disk_recovered):
+            continue
+
+        alert.is_resolved = True
+        alert.resolved_at = resolved_at
+        session.add(alert)
+        resolved_count += 1
+
+    if resolved_count > 0:
+        await session.commit()
+
+    return resolved_count
+
 async def generate_branch_metric(session: AsyncSession, branch: Branch) -> Metric:
     latest = await session.execute(
         select(Metric).where(Metric.branch_id == branch.id).order_by(Metric.recorded_at.desc()).limit(1)
@@ -338,6 +373,8 @@ async def generate_branch_metric(session: AsyncSession, branch: Branch) -> Metri
             branch_id=branch.id, alert_type=AlertType.disk_full,
             message=f"Disk Usage critical: {new_disk:.1f}%", severity=AlertSeverity.warning
         ))
+
+    await auto_resolve_recovered_metric_alerts(session, branch, new_cpu, new_disk)
 
     await ensure_branch_state(session, branch)
     return metric

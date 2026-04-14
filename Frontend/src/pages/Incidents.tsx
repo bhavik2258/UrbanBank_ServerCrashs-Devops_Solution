@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useDeferredValue, useEffect, useMemo, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { TableSkeleton } from "@/components/LoadingSkeleton";
 import { fetchIncidents } from "@/api/api";
@@ -13,6 +13,7 @@ const Incidents = () => {
   const [incidents, setIncidents] = useState<Incident[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
+  const deferredSearchTerm = useDeferredValue(searchTerm);
   const canExportIncidents = hasPermission("export_incidents");
 
   useEffect(() => {
@@ -33,10 +34,17 @@ const Incidents = () => {
     });
   };
 
-  const filteredIncidents = incidents.filter(inc => 
-    inc.branchName.toLowerCase().includes(searchTerm.toLowerCase()) || 
-    inc.description.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  const filteredIncidents = useMemo(() => {
+    const query = deferredSearchTerm.trim().toLowerCase();
+    if (!query) {
+      return incidents;
+    }
+    return incidents.filter(
+      (incident) =>
+        incident.branchName.toLowerCase().includes(query) ||
+        incident.description.toLowerCase().includes(query)
+    );
+  }, [deferredSearchTerm, incidents]);
 
   return (
     <div className="space-y-6">

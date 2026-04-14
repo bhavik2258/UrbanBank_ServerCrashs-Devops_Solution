@@ -1,3 +1,4 @@
+import { lazy, Suspense } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Route, Routes, Navigate, Outlet } from "react-router-dom";
 import { Toaster as Sonner } from "@/components/ui/sonner";
@@ -5,13 +6,14 @@ import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { ThemeProvider } from "@/components/theme-provider";
 import Navbar from "@/components/Navbar";
-import Dashboard from "@/pages/Dashboard";
-import BranchDetail from "@/pages/BranchDetail";
-import Alerts from "@/pages/Alerts";
-import Incidents from "@/pages/Incidents";
-import NotFound from "@/pages/NotFound";
-import Login from "@/pages/Login";
 import { isAuthenticated } from "@/lib/auth";
+
+const Dashboard = lazy(() => import("@/pages/Dashboard"));
+const BranchDetail = lazy(() => import("@/pages/BranchDetail"));
+const Alerts = lazy(() => import("@/pages/Alerts"));
+const Incidents = lazy(() => import("@/pages/Incidents"));
+const NotFound = lazy(() => import("@/pages/NotFound"));
+const Login = lazy(() => import("@/pages/Login"));
 
 const queryClient = new QueryClient();
 
@@ -49,18 +51,20 @@ const App = () => (
             v7_relativeSplatPath: true,
           }}
         >
-          <Routes>
-            <Route element={<PublicRoute />}>
-              <Route path="/login" element={<Login />} />
-            </Route>
-            <Route element={<ProtectedRoute />}>
-              <Route path="/" element={<Dashboard />} />
-              <Route path="/branch/:id" element={<BranchDetail />} />
-              <Route path="/alerts" element={<Alerts />} />
-              <Route path="/incidents" element={<Incidents />} />
-              <Route path="*" element={<NotFound />} />
-            </Route>
-          </Routes>
+          <Suspense fallback={<div className="p-6 text-sm text-muted-foreground">Loading page...</div>}>
+            <Routes>
+              <Route element={<PublicRoute />}>
+                <Route path="/login" element={<Login />} />
+              </Route>
+              <Route element={<ProtectedRoute />}>
+                <Route path="/" element={<Dashboard />} />
+                <Route path="/branch/:id" element={<BranchDetail />} />
+                <Route path="/alerts" element={<Alerts />} />
+                <Route path="/incidents" element={<Incidents />} />
+                <Route path="*" element={<NotFound />} />
+              </Route>
+            </Routes>
+          </Suspense>
         </BrowserRouter>
       </TooltipProvider>
     </QueryClientProvider>

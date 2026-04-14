@@ -1,3 +1,5 @@
+import { memo } from "react";
+
 interface StatusPillProps {
   status: "UP" | "DOWN";
   label: string;
@@ -18,4 +20,4 @@ const StatusPill = ({ status, label }: StatusPillProps) => (
   </div>
 );
 
-export default StatusPill;
+export default memo(StatusPill);
