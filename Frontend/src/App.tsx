@@ -11,12 +11,12 @@ import Alerts from "@/pages/Alerts";
 import Incidents from "@/pages/Incidents";
 import NotFound from "@/pages/NotFound";
 import Login from "@/pages/Login";
+import { isAuthenticated } from "@/lib/auth";
 
 const queryClient = new QueryClient();
 
 const ProtectedRoute = () => {
-  const isAuthenticated = sessionStorage.getItem("isAuthenticated") === "true";
-  if (!isAuthenticated) {
+  if (!isAuthenticated()) {
     return <Navigate to="/login" replace />;
   }
   return (
@@ -30,15 +30,29 @@ const ProtectedRoute = () => {
   );
 };
 
+const PublicRoute = () => {
+  if (isAuthenticated()) {
+    return <Navigate to="/" replace />;
+  }
+  return <Outlet />;
+};
+
 const App = () => (
   <ThemeProvider defaultTheme="system" storageKey="opswatch-theme">
     <QueryClientProvider client={queryClient}>
       <TooltipProvider>
         <Toaster />
         <Sonner />
-        <BrowserRouter>
+        <BrowserRouter
+          future={{
+            v7_startTransition: true,
+            v7_relativeSplatPath: true,
+          }}
+        >
           <Routes>
-            <Route path="/login" element={<Login />} />
+            <Route element={<PublicRoute />}>
+              <Route path="/login" element={<Login />} />
+            </Route>
             <Route element={<ProtectedRoute />}>
               <Route path="/" element={<Dashboard />} />
               <Route path="/branch/:id" element={<BranchDetail />} />

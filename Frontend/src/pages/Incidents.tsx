@@ -7,17 +7,26 @@ import { CheckCircle, XCircle, Download, Filter } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { toast } from "sonner";
+import { hasPermission } from "@/lib/auth";
 
 const Incidents = () => {
   const [incidents, setIncidents] = useState<Incident[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
+  const canExportIncidents = hasPermission("export_incidents");
 
   useEffect(() => {
     fetchIncidents().then(data => { setIncidents(data); setLoading(false); });
   }, []);
 
   const handleExport = () => {
+    if (!canExportIncidents) {
+      toast.info("Read-only role", {
+        description: "Your role does not allow incident exports.",
+      });
+      return;
+    }
+
     toast.success("Incident Report Exported", {
       description: "CSV file has been downloaded to your machine.",
       icon: <Download className="h-4 w-4" />
@@ -43,7 +52,7 @@ const Incidents = () => {
               onChange={(e) => setSearchTerm(e.target.value)}
             />
           </div>
-          <Button variant="outline" onClick={handleExport} className="gap-2 whitespace-nowrap">
+          <Button variant="outline" onClick={handleExport} className="gap-2 whitespace-nowrap" disabled={!canExportIncidents}>
             <Download className="h-4 w-4" /> <span className="hidden sm:inline">Export CSV</span>
           </Button>
         </div>

@@ -1,0 +1,19 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: urbanbank
+resources:
+  - namespace.yaml
+  - configmap.yaml
+  - secret.yaml
+  - postgres-pvc.yaml
+  - postgres-service.yaml
+  - postgres-deployment.yaml
+  - backend-service.yaml
+  - backend-deployment.yaml
+  - backend-hpa.yaml
+  - backend-pdb.yaml
+  - frontend-service.yaml
+  - frontend-deployment.yaml
+  - frontend-pdb.yaml
+  - postgres-pdb.yaml
+  - ingress.yaml

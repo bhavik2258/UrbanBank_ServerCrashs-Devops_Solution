@@ -1,8 +1,9 @@
 from __future__ import annotations
 
 from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy import and_, case, func, select
+from sqlalchemy import case, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import aliased
 
 from database import get_db
 from models import Branch, Metric
@@ -15,64 +16,38 @@ router = APIRouter(prefix="", tags=["branches"])
 
 
 def _branch_snapshot_query():
-    latest_metric_timestamp_subquery = (
-        select(
-            Metric.branch_id.label("branch_id"),
-            func.max(Metric.recorded_at).label("latest_recorded_at"),
-        )
-        .group_by(Metric.branch_id)
+    latest_metric = aliased(Metric)
+    recent_metric = aliased(Metric)
+
+    latest_metric_id_subquery = (
+        select(latest_metric.id)
+        .where(latest_metric.branch_id == Branch.id)
+        .order_by(latest_metric.recorded_at.desc(), latest_metric.id.desc())
+        .limit(1)
+        .correlate(Branch)
+        .scalar_subquery()
+    )
+
+    recent_core_status_subquery = (
+        select(recent_metric.core_banking_service_up.label("core_banking_service_up"))
+        .where(recent_metric.branch_id == Branch.id)
+        .order_by(recent_metric.recorded_at.desc(), recent_metric.id.desc())
+        .limit(60)
+        .correlate(Branch)
         .subquery()
     )
 
-    latest_metric_subquery = (
+    uptime_percent_subquery = (
         select(
-            Metric.branch_id.label("branch_id"),
-            Metric.id.label("metric_id"),
-            Metric.cpu_usage.label("cpu_usage"),
-            Metric.ram_usage.label("ram_usage"),
-            Metric.disk_usage.label("disk_usage"),
-            Metric.core_banking_service_up.label("core_banking_service_up"),
-            Metric.postgres_db_up.label("postgres_db_up"),
-            Metric.network_up.label("network_up"),
-            Metric.recorded_at.label("recorded_at"),
-        )
-        .join(
-            latest_metric_timestamp_subquery,
-            and_(
-                Metric.branch_id == latest_metric_timestamp_subquery.c.branch_id,
-                Metric.recorded_at == latest_metric_timestamp_subquery.c.latest_recorded_at,
-            ),
-        )
-        .subquery()
-    )
-
-    ranked_metrics_subquery = (
-        select(
-            Metric.branch_id.label("branch_id"),
-            Metric.core_banking_service_up.label("core_banking_service_up"),
-            func.row_number()
-            .over(partition_by=Metric.branch_id, order_by=Metric.recorded_at.desc())
-            .label("metric_rank"),
-        )
-        .subquery()
-    )
-
-    uptime_subquery = (
-        select(
-            ranked_metrics_subquery.c.branch_id,
-            (
-                func.avg(
-                    case(
-                        (ranked_metrics_subquery.c.core_banking_service_up.is_(True), 1),
-                        else_=0,
-                    )
+            func.avg(
+                case(
+                    (recent_core_status_subquery.c.core_banking_service_up.is_(True), 1),
+                    else_=0,
                 )
-                * 100.0
-            ).label("uptime_percent"),
+            )
+            * 100.0
         )
-        .where(ranked_metrics_subquery.c.metric_rank <= 60)
-        .group_by(ranked_metrics_subquery.c.branch_id)
-        .subquery()
+        .scalar_subquery()
     )
 
     return (
@@ -84,18 +59,17 @@ def _branch_snapshot_query():
             Branch.location.label("location"),
             Branch.status.label("status"),
             Branch.created_at.label("created_at"),
-            uptime_subquery.c.uptime_percent.label("uptime_percent"),
-            latest_metric_subquery.c.metric_id.label("metric_id"),
-            latest_metric_subquery.c.cpu_usage.label("cpu_usage"),
-            latest_metric_subquery.c.ram_usage.label("ram_usage"),
-            latest_metric_subquery.c.disk_usage.label("disk_usage"),
-            latest_metric_subquery.c.core_banking_service_up.label("core_banking_service_up"),
-            latest_metric_subquery.c.postgres_db_up.label("postgres_db_up"),
-            latest_metric_subquery.c.network_up.label("network_up"),
-            latest_metric_subquery.c.recorded_at.label("recorded_at"),
+            func.coalesce(uptime_percent_subquery, 100.0).label("uptime_percent"),
+            Metric.id.label("metric_id"),
+            Metric.cpu_usage.label("cpu_usage"),
+            Metric.ram_usage.label("ram_usage"),
+            Metric.disk_usage.label("disk_usage"),
+            Metric.core_banking_service_up.label("core_banking_service_up"),
+            Metric.postgres_db_up.label("postgres_db_up"),
+            Metric.network_up.label("network_up"),
+            Metric.recorded_at.label("recorded_at"),
         )
-        .outerjoin(latest_metric_subquery, Branch.id == latest_metric_subquery.c.branch_id)
-        .outerjoin(uptime_subquery, Branch.id == uptime_subquery.c.branch_id)
+        .outerjoin(Metric, Metric.id == latest_metric_id_subquery)
     )
 
 

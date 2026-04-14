@@ -7,6 +7,7 @@ import AlertBadge from "@/components/AlertBadge";
 import { TableSkeleton } from "@/components/LoadingSkeleton";
 import { fetchAlerts, resolveAlert } from "@/api/api";
 import type { Alert } from "@/api/api";
+import { hasPermission } from "@/lib/auth";
 
 const Alerts = () => {
   const [alerts, setAlerts] = useState<Alert[]>([]);
@@ -14,6 +15,7 @@ const Alerts = () => {
   const [filterBranch, setFilterBranch] = useState("all");
   const [filterSeverity, setFilterSeverity] = useState("all");
   const [filterStatus, setFilterStatus] = useState("all");
+  const canResolveAlerts = hasPermission("resolve_alert");
 
   const load = async () => {
     const data = await fetchAlerts();
@@ -24,6 +26,10 @@ const Alerts = () => {
   useEffect(() => { load(); }, []);
 
   const handleResolve = async (id: string) => {
+    if (!canResolveAlerts) {
+      toast.info("Read-only role", { description: "Your role cannot resolve alerts." });
+      return;
+    }
     await resolveAlert(id);
     toast.success("Alert resolved");
     load();
@@ -78,7 +84,8 @@ const Alerts = () => {
                 <thead>
                   <tr className="border-b border-border text-left text-xs text-muted-foreground">
                     <th className="pb-2">Branch</th><th className="pb-2">Type</th><th className="pb-2">Severity</th>
-                    <th className="pb-2">Message</th><th className="pb-2">Time</th><th className="pb-2">Status</th><th className="pb-2">Action</th>
+                    <th className="pb-2">Message</th><th className="pb-2">Time</th><th className="pb-2">Status</th>
+                    {canResolveAlerts ? <th className="pb-2">Action</th> : null}
                   </tr>
                 </thead>
                 <tbody>
@@ -94,17 +101,19 @@ const Alerts = () => {
                           {a.resolved ? "Resolved" : "Active"}
                         </span>
                       </td>
-                      <td className="py-2.5">
-                        {!a.resolved && (
-                          <Button size="sm" variant="outline" className="text-[10px] h-7" onClick={() => handleResolve(a.id)}>
-                            Mark Resolved
-                          </Button>
-                        )}
-                      </td>
+                      {canResolveAlerts ? (
+                        <td className="py-2.5">
+                          {!a.resolved && (
+                            <Button size="sm" variant="outline" className="text-[10px] h-7" onClick={() => handleResolve(a.id)}>
+                              Mark Resolved
+                            </Button>
+                          )}
+                        </td>
+                      ) : null}
                     </tr>
                   ))}
                   {filtered.length === 0 && (
-                    <tr><td colSpan={7} className="py-8 text-center text-muted-foreground text-sm">No alerts match your filters</td></tr>
+                    <tr><td colSpan={canResolveAlerts ? 7 : 6} className="py-8 text-center text-muted-foreground text-sm">No alerts match your filters</td></tr>
                   )}
                 </tbody>
               </table>

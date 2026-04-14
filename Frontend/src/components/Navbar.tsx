@@ -5,6 +5,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel,
 import { Button } from "@/components/ui/button";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { SettingsDialog } from "@/components/SettingsDialog";
+import { clearSession, getSession } from "@/lib/auth";
 
 const links = [
   { to: "/", label: "Dashboard", icon: LayoutDashboard },
@@ -15,9 +16,14 @@ const links = [
 const Navbar = () => {
   const navigate = useNavigate();
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const session = getSession();
+
+  const userName = session?.name ?? "UrbanBank User";
+  const userRole = session?.roleLabel ?? "No Role";
+  const userEmail = session?.email ?? "";
 
   const handleLogout = () => {
-    sessionStorage.removeItem("isAuthenticated");
+    clearSession();
     navigate("/login");
   };
 
@@ -63,13 +69,16 @@ const Navbar = () => {
                   <User className="h-4 w-4" />
                 </div>
                 <div className="hidden md:flex flex-col items-start text-left">
-                  <span className="text-sm font-medium leading-none">System Admin</span>
-                  <span className="text-xs text-muted-foreground mt-1">IT Operations</span>
+                  <span className="text-sm font-medium leading-none">{userName}</span>
+                  <span className="text-xs text-muted-foreground mt-1">{userRole}</span>
                 </div>
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-56">
-              <DropdownMenuLabel>My Account</DropdownMenuLabel>
+              <DropdownMenuLabel>
+                <p className="font-medium">My Account</p>
+                <p className="text-xs text-muted-foreground mt-1">{userEmail}</p>
+              </DropdownMenuLabel>
               <DropdownMenuSeparator />
               <DropdownMenuItem onClick={() => setSettingsOpen(true)} className="cursor-pointer gap-2">
                 <Settings className="h-4 w-4 text-muted-foreground" /> Account Settings
@@ -83,7 +92,13 @@ const Navbar = () => {
         </div>
       </div>
     </nav>
-    <SettingsDialog open={settingsOpen} onOpenChange={setSettingsOpen} />
+    <SettingsDialog
+      open={settingsOpen}
+      onOpenChange={setSettingsOpen}
+      userName={userName}
+      userEmail={userEmail}
+      userRole={userRole}
+    />
     </>
   );
 };

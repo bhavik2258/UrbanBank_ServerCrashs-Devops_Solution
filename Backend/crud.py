@@ -315,13 +315,25 @@ async def generate_branch_metric(session: AsyncSession, branch: Branch) -> Metri
         "network_up": net_up,
     })
 
+    # Avoid creating duplicate unresolved warning alerts for the same branch.
+    active_alert_types: set[str] = set()
+    if new_cpu > 80.0 or new_disk > 90.0:
+        active_alert_types_result = await session.execute(
+            select(Alert.alert_type).where(
+                Alert.branch_id == branch.id,
+                Alert.is_resolved.is_(False),
+                Alert.alert_type.in_([AlertType.high_cpu.value, AlertType.disk_full.value]),
+            )
+        )
+        active_alert_types = set(active_alert_types_result.scalars().all())
+
     # Alert logic
-    if new_cpu > 80.0:
+    if new_cpu > 80.0 and AlertType.high_cpu.value not in active_alert_types:
         await create_alert(session, AlertCreate(
             branch_id=branch.id, alert_type=AlertType.high_cpu,
             message=f"High CPU Usage detected: {new_cpu:.1f}%", severity=AlertSeverity.warning
         ))
-    if new_disk > 90.0:
+    if new_disk > 90.0 and AlertType.disk_full.value not in active_alert_types:
         await create_alert(session, AlertCreate(
             branch_id=branch.id, alert_type=AlertType.disk_full,
             message=f"Disk Usage critical: {new_disk:.1f}%", severity=AlertSeverity.warning

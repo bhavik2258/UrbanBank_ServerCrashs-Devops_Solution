@@ -122,7 +122,7 @@ interface DashboardStreamCallbacks {
   onError?: (event: Event) => void;
 }
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:8000";
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "/api";
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const response = await fetch(`${API_BASE_URL}${path}`, {
@@ -260,7 +260,7 @@ export const fetchMetricHistory = async (branchId: string): Promise<MetricReadin
 
 export const fetchAlerts = async (): Promise<Alert[]> => {
   const [alerts, branchNameMap] = await Promise.all([
-    request<BackendAlert[]>("/alerts"),
+    request<BackendAlert[]>("/alerts?limit=500"),
     getBranchNameMap(),
   ]);
   return alerts.map((alert) => mapAlert(alert, branchNameMap.get(alert.branch_id) ?? `Branch ${alert.branch_id}`));
@@ -269,7 +269,7 @@ export const fetchAlerts = async (): Promise<Alert[]> => {
 export const fetchAlertsByBranch = async (branchId: string): Promise<Alert[]> => {
   const id = toBranchId(branchId);
   const [alerts, branchDetails] = await Promise.all([
-    request<BackendAlert[]>(`/alerts?branch_id=${id}`),
+    request<BackendAlert[]>(`/alerts?branch_id=${id}&limit=200`),
     request<BackendBranch>(`/branches/${id}`),
   ]);
   return alerts.map((alert) => mapAlert(alert, branchDetails.name));

@@ -15,9 +15,10 @@ router = APIRouter(prefix="", tags=["alerts"])
 @router.get("/alerts", response_model=list[AlertRead])
 async def read_alerts(
     branch_id: int | None = Query(default=None),
+    limit: int = Query(default=500, ge=1, le=2000),
     db: AsyncSession = Depends(get_db),
 ):
-    query = select(Alert).order_by(Alert.fired_at.desc())
+    query = select(Alert).order_by(Alert.fired_at.desc()).limit(limit)
     if branch_id is not None:
         query = query.where(Alert.branch_id == branch_id)
 

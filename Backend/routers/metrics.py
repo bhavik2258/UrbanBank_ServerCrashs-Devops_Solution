@@ -59,38 +59,36 @@ async def dashboard_summary(db: AsyncSession = Depends(get_db)):
         )
     ).scalar_one()
 
-    ranked_metrics_subquery = (
-        select(
-            Metric.branch_id.label("branch_id"),
-            Metric.core_banking_service_up.label("core_banking_service_up"),
-            func.row_number()
-            .over(partition_by=Metric.branch_id, order_by=Metric.recorded_at.desc())
-            .label("metric_rank"),
-        )
+    recent_core_status_subquery = (
+        select(Metric.core_banking_service_up.label("core_banking_service_up"))
+        .where(Metric.branch_id == Branch.id)
+        .order_by(Metric.recorded_at.desc(), Metric.id.desc())
+        .limit(60)
         .subquery()
     )
 
-    per_branch_uptime_subquery = (
-        select(
-            ranked_metrics_subquery.c.branch_id.label("branch_id"),
-            (
-                func.avg(
-                    case(
-                        (ranked_metrics_subquery.c.core_banking_service_up.is_(True), 1),
-                        else_=0,
-                    )
-                )
-                * 100.0
-            ).label("uptime_percent"),
+    uptime_rows = (
+        await db.execute(
+            select(
+                func.coalesce(
+                    select(
+                        func.avg(
+                            case(
+                                (recent_core_status_subquery.c.core_banking_service_up.is_(True), 1),
+                                else_=0,
+                            )
+                        )
+                        * 100.0
+                    ).scalar_subquery(),
+                    100.0,
+                ).label("uptime_percent")
+            ).select_from(Branch)
         )
-        .where(ranked_metrics_subquery.c.metric_rank <= 60)
-        .group_by(ranked_metrics_subquery.c.branch_id)
-        .subquery()
-    )
+    ).all()
 
-    avg_uptime_scalar = (
-        await db.execute(select(func.avg(per_branch_uptime_subquery.c.uptime_percent)))
-    ).scalar_one_or_none()
+    avg_uptime_scalar = None
+    if uptime_rows:
+        avg_uptime_scalar = sum(float(row.uptime_percent) for row in uptime_rows) / len(uptime_rows)
     avg_uptime = 100.0 if avg_uptime_scalar is None else round(float(avg_uptime_scalar), 2)
     
     return DashboardSummary(

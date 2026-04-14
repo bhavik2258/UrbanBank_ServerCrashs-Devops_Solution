@@ -16,9 +16,10 @@ interface BranchCardProps {
   branch: Branch;
   onSimulateFailure: (id: string) => void;
   onTriggerHeal: (id: string) => void;
+  canOperate: boolean;
 }
 
-const BranchCard = ({ branch, onSimulateFailure, onTriggerHeal }: BranchCardProps) => {
+const BranchCard = ({ branch, onSimulateFailure, onTriggerHeal, canOperate }: BranchCardProps) => {
   const navigate = useNavigate();
   const cfg = statusConfig[branch.status];
 
@@ -54,12 +55,20 @@ const BranchCard = ({ branch, onSimulateFailure, onTriggerHeal }: BranchCardProp
           <Button size="sm" variant="outline" className="flex-1 text-xs" onClick={() => navigate(`/branch/${branch.id}`)}>
             <Eye className="h-3 w-3 mr-1" /> Details
           </Button>
-          <Button size="sm" variant="destructive" className="text-xs" onClick={() => onSimulateFailure(branch.id)}>
-            <Zap className="h-3 w-3 mr-1" /> Fail
-          </Button>
-          <Button size="sm" className="text-xs bg-status-healthy text-primary-foreground hover:bg-status-healthy/90" onClick={() => onTriggerHeal(branch.id)}>
-            <HeartPulse className="h-3 w-3 mr-1" /> Heal
-          </Button>
+          {canOperate ? (
+            <>
+              <Button size="sm" variant="destructive" className="text-xs" onClick={() => onSimulateFailure(branch.id)}>
+                <Zap className="h-3 w-3 mr-1" /> Fail
+              </Button>
+              <Button size="sm" className="text-xs bg-status-healthy text-primary-foreground hover:bg-status-healthy/90" onClick={() => onTriggerHeal(branch.id)}>
+                <HeartPulse className="h-3 w-3 mr-1" /> Heal
+              </Button>
+            </>
+          ) : (
+            <span className="inline-flex items-center rounded-md border px-2 text-[11px] text-muted-foreground">
+              Read-only role
+            </span>
+          )}
         </div>
       </CardContent>
     </Card>

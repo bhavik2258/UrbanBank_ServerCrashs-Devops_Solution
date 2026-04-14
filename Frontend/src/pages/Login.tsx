@@ -1,10 +1,12 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Activity, Lock } from "lucide-react";
+import { toast } from "sonner";
+import { DIRECTORY, isAuthenticated, setSession } from "@/lib/auth";
 
 export default function Login() {
   const [email, setEmail] = useState("");
@@ -12,15 +14,40 @@ export default function Login() {
   const [isLoading, setIsLoading] = useState(false);
   const navigate = useNavigate();
 
+  useEffect(() => {
+    if (isAuthenticated()) {
+      navigate("/", { replace: true });
+    }
+  }, [navigate]);
+
   const handleLogin = (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
-    // Mock login authentication
-    setTimeout(() => {
+
+    const normalizedEmail = email.trim().toLowerCase();
+    const user = DIRECTORY[normalizedEmail];
+
+    window.setTimeout(() => {
+      if (!user || user.password !== password) {
+        setIsLoading(false);
+        toast.error("Invalid credentials", {
+          description: "Please check your email, password, and assigned role account.",
+        });
+        return;
+      }
+
+      setSession({
+        name: user.name,
+        email: normalizedEmail,
+        role: user.role,
+      });
+
       setIsLoading(false);
-      sessionStorage.setItem("isAuthenticated", "true");
-      navigate("/");
-    }, 1000);
+      toast.success("Login successful", {
+        description: `Signed in as ${user.name}`,
+      });
+      navigate("/", { replace: true });
+    }, 500);
   };
 
   return (
@@ -38,8 +65,8 @@ export default function Login() {
         </div>
         <Card className="shadow-2xl border-t-4 border-t-primary">
           <CardHeader className="space-y-1 text-center">
-            <CardTitle className="text-2xl">Administrator Login</CardTitle>
-            <CardDescription>Enter your staff credentials to access the dashboard</CardDescription>
+            <CardTitle className="text-2xl">Sign In</CardTitle>
+            <CardDescription>Use your assigned UrbanBank operations account to continue</CardDescription>
           </CardHeader>
           <form onSubmit={handleLogin}>
             <CardContent className="space-y-4">
@@ -56,7 +83,7 @@ export default function Login() {
               </div>
               <div className="space-y-2">
                 <div className="flex items-center justify-between">
-                  <Label htmlFor="password">Security Token</Label>
+                  <Label htmlFor="password">Password</Label>
                   <a href="#" className="text-xs text-primary hover:underline hover:text-primary/80">
                     Forgot password?
                   </a>
@@ -76,7 +103,7 @@ export default function Login() {
                 {isLoading ? (
                   <span className="flex items-center gap-2">
                     <div className="h-4 w-4 rounded-full border-2 border-background border-t-transparent animate-spin"/>
-                    Authenticating...
+                    Signing in
                   </span>
                 ) : (
                   <span className="flex items-center gap-2">
@@ -87,6 +114,12 @@ export default function Login() {
             </CardFooter>
           </form>
         </Card>
+        <div className="mt-4 rounded-lg border bg-card/70 p-3 text-xs text-muted-foreground">
+          <p className="font-medium text-foreground mb-1">Role Accounts</p>
+          <p>Admin: admin@urbanbank.com / admin123</p>
+          <p>Operations: ops@urbanbank.com / ops123</p>
+          <p>Auditor: auditor@urbanbank.com / audit123</p>
+        </div>
         <div className="text-center mt-8 text-xs text-muted-foreground">
           <p>© 2026 UrbanBank Infrastructure Team.</p>
           <p>Authorized access only. All actions are logged.</p>

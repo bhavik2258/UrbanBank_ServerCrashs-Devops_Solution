@@ -13,6 +13,7 @@ import {
 import type { Branch } from "@/api/api";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
+import { hasPermission } from "@/lib/auth";
 
 const Dashboard = () => {
   const [allBranches, setAllBranches] = useState<Branch[]>([]);
@@ -20,12 +21,16 @@ const Dashboard = () => {
   const [summary, setSummary] = useState<{ totalBranches: number; activeAlerts: number; incidentsToday: number; avgUptime: number } | null>(null);
   const [loading, setLoading] = useState(true);
   const [streamConnected, setStreamConnected] = useState(false);
+  const canOperate = hasPermission("simulate_incident") && hasPermission("trigger_heal");
 
   const load = async () => {
     try {
       const [b, s] = await Promise.all([fetchBranches(), getDashboardSummary()]);
       setAllBranches(b);
       setSummary(s);
+    } catch (error) {
+      const description = error instanceof Error ? error.message : "Unexpected network error";
+      toast.error("Failed to load dashboard data", { description });
     } finally {
       setLoading(false);
     }
@@ -93,12 +98,20 @@ const Dashboard = () => {
   }, []);
 
   const handleFailure = async (id: string) => {
+    if (!canOperate) {
+      toast.info("Read-only role", { description: "Your role does not allow incident simulation." });
+      return;
+    }
     await simulateFailure(id);
     toast.error("🔴 Failure simulated", { description: `Branch ${id} is now in critical state` });
     load();
   };
 
   const handleHeal = async (id: string) => {
+    if (!canOperate) {
+      toast.info("Read-only role", { description: "Your role does not allow heal operations." });
+      return;
+    }
     await triggerHeal(id);
     toast.success("🟢 Auto-heal triggered", { description: `Branch ${id} has been restored` });
     load();
@@ -181,7 +194,13 @@ const Dashboard = () => {
           {loading
             ? Array.from({ length: 6 }).map((_, i) => <CardSkeleton key={i} />)
             : filteredBranches.map(b => (
-                <BranchCard key={b.id} branch={b} onSimulateFailure={handleFailure} onTriggerHeal={handleHeal} />
+                <BranchCard
+                  key={b.id}
+                  branch={b}
+                  onSimulateFailure={handleFailure}
+                  onTriggerHeal={handleHeal}
+                  canOperate={canOperate}
+                />
               ))}
           
           {filteredBranches.length === 0 && !loading && (

@@ -13,9 +13,9 @@ from dotenv import load_dotenv
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
-from sqlalchemy import select
+from sqlalchemy import select, text
 
-from crud import ensure_branch_state, generate_branch_metric, seed_database
+from crud import generate_branch_metric, seed_database
 from database import Base, AsyncSessionLocal, engine
 from models import Branch
 from routers import alerts, branches, incidents, metrics
@@ -29,7 +29,21 @@ logging.basicConfig(
 logger = logging.getLogger("urbanbank-backend")
 
 scheduler = AsyncIOScheduler(timezone="UTC")
-METRIC_COLLECTION_INTERVAL_SECONDS = int(os.getenv("METRIC_COLLECTION_INTERVAL_SECONDS", "10"))
+METRIC_COLLECTION_INTERVAL_SECONDS = int(os.getenv("METRIC_COLLECTION_INTERVAL_SECONDS", "120"))
+
+
+async def ensure_performance_indexes() -> None:
+    """Create frequently-used indexes for query paths on large datasets."""
+    index_statements = (
+        "CREATE INDEX IF NOT EXISTS ix_metrics_branch_recorded_at_desc ON metrics (branch_id, recorded_at DESC, id DESC)",
+        "CREATE INDEX IF NOT EXISTS ix_alerts_fired_at_desc ON alerts (fired_at DESC)",
+        "CREATE INDEX IF NOT EXISTS ix_alerts_branch_fired_at_desc ON alerts (branch_id, fired_at DESC)",
+        "CREATE INDEX IF NOT EXISTS ix_incidents_started_at_desc ON incidents (started_at DESC)",
+    )
+
+    async with engine.begin() as conn:
+        for statement in index_statements:
+            await conn.execute(text(statement))
 
 
 class DashboardUpdateBroker:
@@ -75,7 +89,6 @@ async def collect_branch_metrics() -> None:
         branch_rows = list(result.scalars().all())
         for branch in branch_rows:
             await generate_branch_metric(session, branch)
-            await ensure_branch_state(session, branch)
         logger.info("Generated new metric readings for %s branches", len(branch_rows))
         await dashboard_updates.publish(
             {
@@ -94,6 +107,7 @@ async def lifespan(app: FastAPI):
         try:
             async with engine.begin() as conn:
                 await conn.run_sync(Base.metadata.create_all)
+            await ensure_performance_indexes()
             logger.info("Successfully connected to the database and created tables!")
             break
         except Exception as e:
