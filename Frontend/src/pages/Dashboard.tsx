@@ -5,12 +5,13 @@ import BranchCard from "@/components/BranchCard";
 import { CardSkeleton } from "@/components/LoadingSkeleton";
 import {
   fetchBranches,
+  getBankOpsKpis,
   getDashboardSummary,
   simulateFailure,
   subscribeDashboardUpdates,
   triggerHeal,
 } from "@/api/api";
-import type { Branch } from "@/api/api";
+import type { BankOpsKpis, Branch } from "@/api/api";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
 import { hasPermission } from "@/lib/auth";
@@ -20,6 +21,7 @@ const Dashboard = () => {
   const [allBranches, setAllBranches] = useState<Branch[]>([]);
   const [selectedBank, setSelectedBank] = useState<string>("");
   const [summary, setSummary] = useState<{ totalBranches: number; activeAlerts: number; incidentsToday: number; avgUptime: number } | null>(null);
+  const [bankOpsKpis, setBankOpsKpis] = useState<BankOpsKpis | null>(null);
   const [loading, setLoading] = useState(true);
   const [streamConnected, setStreamConnected] = useState(false);
   const [visibleBranchCount, setVisibleBranchCount] = useState(INITIAL_VISIBLE_BRANCHES);
@@ -34,9 +36,10 @@ const Dashboard = () => {
 
   const load = useCallback(async () => {
     try {
-      const [b, s] = await Promise.all([fetchBranches(), getDashboardSummary()]);
+      const [b, s, k] = await Promise.all([fetchBranches(), getDashboardSummary(), getBankOpsKpis()]);
       setAllBranches(b);
       setSummary(s);
+      setBankOpsKpis(k);
     } catch (error) {
       const description = error instanceof Error ? error.message : "Unexpected network error";
       toast.error("Failed to load dashboard data", { description });
@@ -209,6 +212,68 @@ const Dashboard = () => {
                 </div>
               </div>
             ))}
+      </div>
+
+      <div className="space-y-3">
+        <h3 className="text-lg font-semibold tracking-tight">Bank Operations KPIs</h3>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          <div className="rounded-lg border border-border bg-card p-4">
+            <p className="text-xs text-muted-foreground uppercase tracking-wide">Core Txn Success Rate</p>
+            <p className="text-2xl font-bold font-mono mt-1">{bankOpsKpis ? `${bankOpsKpis.transactionSuccessRatePercent}%` : "--"}</p>
+          </div>
+          <div className="rounded-lg border border-border bg-card p-4">
+            <p className="text-xs text-muted-foreground uppercase tracking-wide">Auth Failures (Last Hour)</p>
+            <p className="text-2xl font-bold font-mono mt-1">{bankOpsKpis ? bankOpsKpis.authenticationFailuresLastHour : "--"}</p>
+          </div>
+          <div className="rounded-lg border border-border bg-card p-4">
+            <p className="text-xs text-muted-foreground uppercase tracking-wide">Transfer P95 Latency</p>
+            <p className="text-2xl font-bold font-mono mt-1">{bankOpsKpis ? `${bankOpsKpis.transferP95LatencyMs} ms` : "--"}</p>
+          </div>
+          <div className="rounded-lg border border-border bg-card p-4">
+            <p className="text-xs text-muted-foreground uppercase tracking-wide">Transfer Error Rate</p>
+            <p className="text-2xl font-bold font-mono mt-1">{bankOpsKpis ? `${bankOpsKpis.transferErrorRatePercent}%` : "--"}</p>
+          </div>
+          <div className="rounded-lg border border-border bg-card p-4">
+            <p className="text-xs text-muted-foreground uppercase tracking-wide">ATM/POS/Network Uptime</p>
+            <p className="text-2xl font-bold font-mono mt-1">{bankOpsKpis ? `${bankOpsKpis.atmPosNetworkUptimePercent}%` : "--"}</p>
+          </div>
+          <div className="rounded-lg border border-border bg-card p-4">
+            <p className="text-xs text-muted-foreground uppercase tracking-wide">DB Replication Lag</p>
+            <p className="text-2xl font-bold font-mono mt-1">{bankOpsKpis ? `${bankOpsKpis.dbReplicationLagSeconds}s` : "--"}</p>
+          </div>
+        </div>
+
+        <div className="rounded-lg border border-border bg-card p-4">
+          <p className="text-sm font-semibold mb-3">Alert Volume By Branch And Severity (24h)</p>
+          {!bankOpsKpis || bankOpsKpis.alertVolumeByBranch.length === 0 ? (
+            <p className="text-sm text-muted-foreground">No alerts in last 24 hours.</p>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b text-left text-xs text-muted-foreground uppercase">
+                    <th className="py-2 pr-3">Branch</th>
+                    <th className="py-2 pr-3">Critical</th>
+                    <th className="py-2 pr-3">Warning</th>
+                    <th className="py-2 pr-3">Info</th>
+                    <th className="py-2 pr-3">Total</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {bankOpsKpis.alertVolumeByBranch.map((row) => (
+                    <tr key={row.branchId} className="border-b border-border/50">
+                      <td className="py-2 pr-3">{row.branchName}</td>
+                      <td className="py-2 pr-3 font-mono">{row.critical}</td>
+                      <td className="py-2 pr-3 font-mono">{row.warning}</td>
+                      <td className="py-2 pr-3 font-mono">{row.info}</td>
+                      <td className="py-2 pr-3 font-mono font-semibold">{row.total}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
       </div>
 
       <div className="pt-2">

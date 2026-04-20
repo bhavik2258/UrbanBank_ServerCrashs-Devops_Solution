@@ -52,6 +52,25 @@ export interface MetricReading {
   disk: number;
 }
 
+export interface AlertVolumeByBranch {
+  branchId: string;
+  branchName: string;
+  critical: number;
+  warning: number;
+  info: number;
+  total: number;
+}
+
+export interface BankOpsKpis {
+  transactionSuccessRatePercent: number;
+  authenticationFailuresLastHour: number;
+  transferP95LatencyMs: number;
+  transferErrorRatePercent: number;
+  atmPosNetworkUptimePercent: number;
+  dbReplicationLagSeconds: number;
+  alertVolumeByBranch: AlertVolumeByBranch[];
+}
+
 type BackendBranchStatus = "healthy" | "warning" | "critical";
 
 interface BackendMetric {
@@ -113,6 +132,25 @@ interface BackendDashboardSummary {
   active_alerts: number;
   incidents_today: number;
   avg_uptime_percent: number;
+}
+
+interface BackendAlertVolumeByBranch {
+  branch_id: number;
+  branch_name: string;
+  critical: number;
+  warning: number;
+  info: number;
+  total: number;
+}
+
+interface BackendBankOpsKpis {
+  transaction_success_rate_percent: number;
+  authentication_failures_last_hour: number;
+  transfer_p95_latency_ms: number;
+  transfer_error_rate_percent: number;
+  atm_pos_network_uptime_percent: number;
+  db_replication_lag_seconds: number;
+  alert_volume_by_branch: BackendAlertVolumeByBranch[];
 }
 
 interface DashboardStreamCallbacks {
@@ -346,5 +384,25 @@ export const getDashboardSummary = async () => {
     activeAlerts: summary.active_alerts,
     incidentsToday: summary.incidents_today,
     avgUptime: summary.avg_uptime_percent,
+  };
+};
+
+export const getBankOpsKpis = async (): Promise<BankOpsKpis> => {
+  const kpis = await request<BackendBankOpsKpis>("/dashboard/bank-ops-kpis");
+  return {
+    transactionSuccessRatePercent: kpis.transaction_success_rate_percent,
+    authenticationFailuresLastHour: kpis.authentication_failures_last_hour,
+    transferP95LatencyMs: kpis.transfer_p95_latency_ms,
+    transferErrorRatePercent: kpis.transfer_error_rate_percent,
+    atmPosNetworkUptimePercent: kpis.atm_pos_network_uptime_percent,
+    dbReplicationLagSeconds: kpis.db_replication_lag_seconds,
+    alertVolumeByBranch: kpis.alert_volume_by_branch.map((row) => ({
+      branchId: String(row.branch_id),
+      branchName: row.branch_name,
+      critical: row.critical,
+      warning: row.warning,
+      info: row.info,
+      total: row.total,
+    })),
   };
 };

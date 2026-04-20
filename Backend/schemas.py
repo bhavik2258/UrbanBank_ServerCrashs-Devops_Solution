@@ -116,6 +116,25 @@ class DashboardSummary(BaseModel):
     avg_uptime_percent: float
 
 
+class AlertVolumeByBranch(BaseModel):
+    branch_id: int
+    branch_name: str
+    critical: int
+    warning: int
+    info: int
+    total: int
+
+
+class BankOpsKpis(BaseModel):
+    transaction_success_rate_percent: float = Field(ge=0, le=100)
+    authentication_failures_last_hour: int = Field(ge=0)
+    transfer_p95_latency_ms: float = Field(ge=0)
+    transfer_error_rate_percent: float = Field(ge=0, le=100)
+    atm_pos_network_uptime_percent: float = Field(ge=0, le=100)
+    db_replication_lag_seconds: float = Field(ge=0)
+    alert_volume_by_branch: list[AlertVolumeByBranch]
+
+
 class SimulationResponse(BaseModel):
     message: str
     branch_id: int
