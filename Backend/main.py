@@ -13,12 +13,14 @@ from dotenv import load_dotenv
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
+from prometheus_fastapi_instrumentator import Instrumentator
 from sqlalchemy import select, text
 
 from crud import auto_heal_critical_branches, generate_branch_metric, seed_database
 from database import Base, AsyncSessionLocal, engine
 from models import Branch
 from routers import alerts, branches, incidents, metrics
+from prometheus_metrics import initialize_prometheus_metric_labels, refresh_active_incidents, refresh_branch_status_labels
 
 load_dotenv()
 
@@ -134,6 +136,8 @@ async def lifespan(app: FastAPI):
             
     async with AsyncSessionLocal() as session:
         await seed_database(session)
+        await refresh_active_incidents(session)
+        await refresh_branch_status_labels(session)
     scheduler.add_job(
         collect_branch_metrics,
         "interval",
@@ -168,6 +172,13 @@ app = FastAPI(
     version="1.0.0",
     lifespan=lifespan,
 )
+
+Instrumentator().instrument(app).expose(app)
+
+
+@app.on_event("startup")
+async def startup() -> None:
+    initialize_prometheus_metric_labels()
 
 app.add_middleware(
     CORSMiddleware,

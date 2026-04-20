@@ -1,0 +1,78 @@
+---
+- name: Setup UrbanBank infrastructure on local Minikube
+  hosts: local
+  gather_facts: yes
+  become: yes
+  vars:
+    minikube_binary_url: https://storage.googleapis.com/minikube/releases/latest/minikube-linux-amd64
+    minikube_binary_path: /usr/local/bin/minikube
+    required_packages:
+      - docker.io
+      - kubectl
+      - curl
+      - conntrack
+      - socat
+      - git
+      - python3-pip
+    desired_user: "{{ lookup('env', 'SUDO_USER') | default(lookup('env', 'USER'), true) }}"
+  tasks:
+    - name: Setup block
+      block:
+        - name: Install required packages
+          ansible.builtin.apt:
+            name: "{{ required_packages }}"
+            state: present
+            update_cache: yes
+          when: ansible_os_family == 'Debian'
+
+        - name: Ensure Docker is enabled and started
+          ansible.builtin.service:
+            name: docker
+            state: started
+            enabled: yes
+
+        - name: Add desired user to docker group
+          ansible.builtin.user:
+            name: "{{ desired_user }}"
+            groups: docker
+            append: yes
+
+        - name: Install Minikube binary
+          ansible.builtin.get_url:
+            url: "{{ minikube_binary_url }}"
+            dest: "{{ minikube_binary_path }}"
+            mode: '0755'
+
+        - name: Start Minikube with requested resources
+          ansible.builtin.command: minikube start --driver=docker --memory=4096 --cpus=2
+          become: no
+          changed_when: false
+
+        - name: Enable ingress addon
+          ansible.builtin.command: minikube addons enable ingress
+          become: no
+          changed_when: false
+
+        - name: Enable metrics-server addon
+          ansible.builtin.command: minikube addons enable metrics-server
+          become: no
+          changed_when: false
+
+        - name: Verify installations
+          ansible.builtin.command: "{{ item }}"
+          loop:
+            - docker --version
+            - kubectl version --client
+            - minikube version
+          register: verify_cmds
+          changed_when: false
+          become: no
+
+        - name: Show verification output
+          ansible.builtin.debug:
+            var: verify_cmds.results
+
+      rescue:
+        - name: Infrastructure setup failed
+          ansible.builtin.fail:
+            msg: Infrastructure setup failed. Review task output above for details.

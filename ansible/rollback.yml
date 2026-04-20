@@ -1,0 +1,39 @@
+---
+- name: Rollback UrbanBank backend and frontend deployments
+  hosts: local
+  gather_facts: no
+  vars:
+    k8s_namespace: urbanbank
+  tasks:
+    - name: Rollback block
+      block:
+        - name: Show backend rollout history
+          ansible.builtin.command: "kubectl rollout history deployment/backend -n {{ k8s_namespace }}"
+          changed_when: false
+
+        - name: Show frontend rollout history
+          ansible.builtin.command: "kubectl rollout history deployment/frontend -n {{ k8s_namespace }}"
+          changed_when: false
+
+        - name: Rollback backend deployment
+          ansible.builtin.command: "kubectl rollout undo deployment/backend -n {{ k8s_namespace }}"
+
+        - name: Rollback frontend deployment
+          ansible.builtin.command: "kubectl rollout undo deployment/frontend -n {{ k8s_namespace }}"
+
+        - name: Wait for backend rollback rollout
+          ansible.builtin.command: "kubectl rollout status deployment/backend -n {{ k8s_namespace }} --timeout=240s"
+          changed_when: false
+
+        - name: Wait for frontend rollback rollout
+          ansible.builtin.command: "kubectl rollout status deployment/frontend -n {{ k8s_namespace }} --timeout=240s"
+          changed_when: false
+
+        - name: Verify backend health
+          ansible.builtin.command: "kubectl exec -n {{ k8s_namespace }} deploy/backend -- curl -fsS http://127.0.0.1:8000/health"
+          changed_when: false
+
+      rescue:
+        - name: Rollback failed
+          ansible.builtin.fail:
+            msg: Rollback failed. Manual intervention may be required.

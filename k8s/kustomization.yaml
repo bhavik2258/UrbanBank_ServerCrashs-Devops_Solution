@@ -17,3 +17,13 @@ resources:
   - frontend-pdb.yaml
   - postgres-pdb.yaml
   - ingress.yaml
+  - prometheus-config.yaml
+  - prometheus-pvc.yaml
+  - prometheus-deployment.yaml
+  - prometheus-service.yaml
+  - grafana-pvc.yaml
+  - grafana-datasource-config.yaml
+  - grafana-dashboard-provider.yaml
+  - grafana-dashboard-config.yaml
+  - grafana-deployment.yaml
+  - grafana-service.yaml

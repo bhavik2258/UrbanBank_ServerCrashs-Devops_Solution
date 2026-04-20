@@ -5,6 +5,13 @@ from sqlalchemy import and_, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from models import Alert, AlertSeverity, AlertType, Branch, BranchStatus, Incident, Metric
 from schemas import AlertCreate, IncidentCreate, MetricCreate
+from prometheus_metrics import (
+    active_incidents,
+    record_branch_status,
+    record_incident_created,
+    record_incident_resolved,
+    update_branch_status_current,
+)
 
 CITY_LOCALITIES: dict[str, list[str]] = {
     "Ahmedabad": [
@@ -233,6 +240,7 @@ async def create_incident(session: AsyncSession, incident_data: dict) -> Inciden
     session.add(incident)
     await session.commit()
     await session.refresh(incident)
+    record_incident_created()
     return incident
 
 async def resolve_incident(session: AsyncSession, incident: Incident, auto_healed: bool) -> Incident:
@@ -243,6 +251,7 @@ async def resolve_incident(session: AsyncSession, incident: Incident, auto_heale
     session.add(incident)
     await session.commit()
     await session.refresh(incident)
+    record_incident_resolved()
     return incident
 
 async def get_incidents(
@@ -276,9 +285,12 @@ async def ensure_branch_state(session: AsyncSession, branch: Branch) -> None:
         new_status = BranchStatus.warning.value
         
     if branch.status != new_status:
+        old_status = branch.status
         branch.status = new_status
         session.add(branch)
         await session.commit()
+        record_branch_status(new_status)
+        update_branch_status_current(old_status, new_status)
 
 
 async def auto_resolve_recovered_metric_alerts(
@@ -452,6 +464,8 @@ async def heal_branch(session: AsyncSession, branch: Branch) -> tuple[Metric, Al
     branch.status = BranchStatus.healthy.value
     session.add(branch)
     await session.commit()
+    record_branch_status(BranchStatus.healthy)
+    update_branch_status_current(BranchStatus.critical, BranchStatus.healthy)
     
     return healed_metric, resolved_alert, resolved_incident
 

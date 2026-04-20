@@ -17,18 +17,6 @@
     backend_image: "{{ urbanbank_backend_image }}"
     frontend_image: "{{ urbanbank_frontend_image }}"
     nginx_image: "{{ urbanbank_nginx_image }}"
-    k8s_manifests:
-      - "{{ project_root }}/k8s/namespace.yaml"
-      - "{{ project_root }}/k8s/configmap.yaml"
-      - "{{ project_root }}/k8s/secret.yaml"
-      - "{{ project_root }}/k8s/postgres-pvc.yaml"
-      - "{{ project_root }}/k8s/postgres-deployment.yaml"
-      - "{{ project_root }}/k8s/postgres-service.yaml"
-      - "{{ project_root }}/k8s/backend-deployment.yaml"
-      - "{{ project_root }}/k8s/backend-service.yaml"
-      - "{{ project_root }}/k8s/frontend-deployment.yaml"
-      - "{{ project_root }}/k8s/frontend-service.yaml"
-      - "{{ project_root }}/k8s/backend-hpa.yaml"
   tasks:
     - name: Resolve backend build context
       ansible.builtin.set_fact:
@@ -98,9 +86,8 @@
       ansible.builtin.command: "minikube image load {{ frontend_image }}:latest"
       tags: [deploy]
 
-    - name: Apply Kubernetes manifests
-      ansible.builtin.command: "kubectl apply -f {{ item }}"
-      loop: "{{ k8s_manifests }}"
+    - name: Apply Kubernetes manifests through kustomize
+      ansible.builtin.command: "kubectl apply -k {{ project_root }}/k8s"
       tags: [deploy]
 
     - name: Wait for backend rollout
