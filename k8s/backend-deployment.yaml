@@ -47,6 +47,11 @@ spec:
                 configMapKeyRef:
                   name: urbanbank-config
                   key: METRIC_COLLECTION_INTERVAL_SECONDS
+            - name: BRANCH_AUTO_HEAL_INTERVAL_SECONDS
+              valueFrom:
+                configMapKeyRef:
+                  name: urbanbank-config
+                  key: BRANCH_AUTO_HEAL_INTERVAL_SECONDS
           resources:
             requests:
               memory: 256Mi

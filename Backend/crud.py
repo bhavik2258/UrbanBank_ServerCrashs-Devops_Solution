@@ -285,6 +285,7 @@ async def auto_resolve_recovered_metric_alerts(
     session: AsyncSession,
     branch: Branch,
     cpu_usage: float,
+    ram_usage: float,
     disk_usage: float,
 ) -> int:
     """Automatically resolve warning alerts after sustained metric recovery."""
@@ -292,7 +293,9 @@ async def auto_resolve_recovered_metric_alerts(
         select(Alert).where(
             Alert.branch_id == branch.id,
             Alert.is_resolved.is_(False),
-            Alert.alert_type.in_([AlertType.high_cpu.value, AlertType.disk_full.value]),
+            Alert.alert_type.in_(
+                [AlertType.high_cpu.value, AlertType.high_ram.value, AlertType.disk_full.value]
+            ),
         )
     )
     active_alerts = list(active_alerts_result.scalars().all())
@@ -301,8 +304,9 @@ async def auto_resolve_recovered_metric_alerts(
     resolved_at = datetime.now(timezone.utc)
     for alert in active_alerts:
         cpu_recovered = alert.alert_type == AlertType.high_cpu.value and cpu_usage <= 70.0
+        ram_recovered = alert.alert_type == AlertType.high_ram.value and ram_usage <= 75.0
         disk_recovered = alert.alert_type == AlertType.disk_full.value and disk_usage <= 85.0
-        if not (cpu_recovered or disk_recovered):
+        if not (cpu_recovered or ram_recovered or disk_recovered):
             continue
 
         alert.is_resolved = True
@@ -352,12 +356,14 @@ async def generate_branch_metric(session: AsyncSession, branch: Branch) -> Metri
 
     # Avoid creating duplicate unresolved warning alerts for the same branch.
     active_alert_types: set[str] = set()
-    if new_cpu > 80.0 or new_disk > 90.0:
+    if new_cpu > 80.0 or new_ram > 85.0 or new_disk > 90.0:
         active_alert_types_result = await session.execute(
             select(Alert.alert_type).where(
                 Alert.branch_id == branch.id,
                 Alert.is_resolved.is_(False),
-                Alert.alert_type.in_([AlertType.high_cpu.value, AlertType.disk_full.value]),
+                Alert.alert_type.in_(
+                    [AlertType.high_cpu.value, AlertType.high_ram.value, AlertType.disk_full.value]
+                ),
             )
         )
         active_alert_types = set(active_alert_types_result.scalars().all())
@@ -368,13 +374,18 @@ async def generate_branch_metric(session: AsyncSession, branch: Branch) -> Metri
             branch_id=branch.id, alert_type=AlertType.high_cpu,
             message=f"High CPU Usage detected: {new_cpu:.1f}%", severity=AlertSeverity.warning
         ))
+    if new_ram > 85.0 and AlertType.high_ram.value not in active_alert_types:
+        await create_alert(session, AlertCreate(
+            branch_id=branch.id, alert_type=AlertType.high_ram,
+            message=f"High RAM Usage detected: {new_ram:.1f}%", severity=AlertSeverity.warning
+        ))
     if new_disk > 90.0 and AlertType.disk_full.value not in active_alert_types:
         await create_alert(session, AlertCreate(
             branch_id=branch.id, alert_type=AlertType.disk_full,
             message=f"Disk Usage critical: {new_disk:.1f}%", severity=AlertSeverity.warning
         ))
 
-    await auto_resolve_recovered_metric_alerts(session, branch, new_cpu, new_disk)
+    await auto_resolve_recovered_metric_alerts(session, branch, new_cpu, new_ram, new_disk)
 
     await ensure_branch_state(session, branch)
     return metric
@@ -402,7 +413,7 @@ async def simulate_branch_failure(session: AsyncSession, branch: Branch) -> tupl
         "alert_id": alert.id,
         "description": "core-banking service crashed and requires auto-heal",
         "auto_healed": False,
-        "heal_action": "Restarted core-banking-svc via Ansible auto-heal", # Prepared
+        "heal_action": "Queued for Ansible auto-heal restart",
     })
 
     await ensure_branch_state(session, branch)
@@ -434,6 +445,8 @@ async def heal_branch(session: AsyncSession, branch: Branch) -> tuple[Metric, Al
     
     resolved_incident = None
     for open_incident in open_incidents.scalars().all():
+        open_incident.heal_action = "Restarted core-banking-svc via Ansible auto-heal"
+        session.add(open_incident)
         resolved_incident = await resolve_incident(session, open_incident, auto_healed=True)
         
     branch.status = BranchStatus.healthy.value
@@ -441,3 +454,18 @@ async def heal_branch(session: AsyncSession, branch: Branch) -> tuple[Metric, Al
     await session.commit()
     
     return healed_metric, resolved_alert, resolved_incident
+
+
+async def auto_heal_critical_branches(session: AsyncSession) -> int:
+    """Auto-heal all branches currently in critical state."""
+    critical_branches_result = await session.execute(
+        select(Branch).where(Branch.status == BranchStatus.critical.value).order_by(Branch.id.asc())
+    )
+    critical_branches = list(critical_branches_result.scalars().all())
+    healed_count = 0
+
+    for branch in critical_branches:
+        await heal_branch(session, branch)
+        healed_count += 1
+
+    return healed_count

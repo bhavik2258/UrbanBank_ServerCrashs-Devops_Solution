@@ -1,0 +1,9 @@
+---
+urbanbank_backend_image: urbanbank-backend
+urbanbank_frontend_image: urbanbank-frontend
+urbanbank_nginx_image: urbanbank-nginx
+
+prometheus_chart_version: "58.1.2"
+grafana_chart_version: "8.3.4"
+grafana_admin_user: admin
+grafana_admin_password: admin123

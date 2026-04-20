@@ -1,9 +1,9 @@
-import { useDeferredValue, useEffect, useMemo, useState } from "react";
+import { useCallback, useDeferredValue, useEffect, useMemo, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { TableSkeleton } from "@/components/LoadingSkeleton";
 import { fetchIncidents } from "@/api/api";
 import type { Incident } from "@/api/api";
-import { CheckCircle, XCircle, Download, Filter } from "lucide-react";
+import { CheckCircle, XCircle, Download, Filter, LoaderCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { toast } from "sonner";
@@ -16,9 +16,30 @@ const Incidents = () => {
   const deferredSearchTerm = useDeferredValue(searchTerm);
   const canExportIncidents = hasPermission("export_incidents");
 
-  useEffect(() => {
-    fetchIncidents().then(data => { setIncidents(data); setLoading(false); });
+  const loadIncidents = useCallback(async () => {
+    const data = await fetchIncidents();
+    setIncidents(data);
+    setLoading(false);
   }, []);
+
+  useEffect(() => {
+    let mounted = true;
+
+    const refresh = async () => {
+      if (!mounted) {
+        return;
+      }
+      await loadIncidents();
+    };
+
+    refresh();
+    const intervalId = window.setInterval(refresh, 15000);
+
+    return () => {
+      mounted = false;
+      window.clearInterval(intervalId);
+    };
+  }, [loadIncidents]);
 
   const handleExport = () => {
     if (!canExportIncidents) {
@@ -99,13 +120,19 @@ const Incidents = () => {
                           <span className="inline-flex items-center rounded-full border border-green-500/20 bg-green-500/10 px-2.5 py-0.5 text-xs font-medium text-green-700 dark:text-green-400 gap-1.5">
                             <CheckCircle className="h-3.5 w-3.5" /> Auto-Healed
                           </span>
+                        ) : !inc.endTime ? (
+                          <span className="inline-flex items-center rounded-full border border-amber-500/20 bg-amber-500/10 px-2.5 py-0.5 text-xs font-medium text-amber-700 dark:text-amber-400 gap-1.5">
+                            <LoaderCircle className="h-3.5 w-3.5 animate-spin" /> Auto-Heal Pending
+                          </span>
                         ) : (
                           <span className="inline-flex items-center rounded-full border border-red-500/20 bg-red-500/10 px-2.5 py-0.5 text-xs font-medium text-red-700 dark:text-red-400 gap-1.5">
                             <XCircle className="h-3.5 w-3.5" /> Manual Action Needed
                           </span>
                         )}
                       </td>
-                      <td className="p-3 text-xs text-muted-foreground font-mono bg-muted/30 rounded">{inc.healAction || "Pending Ansible Plan"}</td>
+                      <td className="p-3 text-xs text-muted-foreground font-mono bg-muted/30 rounded">
+                        {!inc.endTime ? "Queued for Ansible auto-heal restart" : (inc.healAction || "Pending Ansible Plan")}
+                      </td>
                       <td className="p-3 text-xs font-mono">{inc.duration}</td>
                       <td className="p-3 text-[11px] text-muted-foreground">
                         {new Date(inc.startTime).toLocaleString()}

@@ -1,0 +1,123 @@
+---
+- name: Build and deploy UrbanBank application
+  hosts: local
+  gather_facts: yes
+  vars:
+    project_root: "{{ playbook_dir }}/.."
+    backend_context_candidates:
+      - "{{ project_root }}/backend"
+      - "{{ project_root }}/Backend"
+    frontend_context_candidates:
+      - "{{ project_root }}/frontend"
+      - "{{ project_root }}/Frontend"
+    nginx_context_candidates:
+      - "{{ project_root }}/nginx"
+      - "{{ project_root }}/Frontend"
+    image_tag: "{{ ansible_date_time.iso8601_basic_short }}"
+    backend_image: "{{ urbanbank_backend_image }}"
+    frontend_image: "{{ urbanbank_frontend_image }}"
+    nginx_image: "{{ urbanbank_nginx_image }}"
+    k8s_manifests:
+      - "{{ project_root }}/k8s/namespace.yaml"
+      - "{{ project_root }}/k8s/configmap.yaml"
+      - "{{ project_root }}/k8s/secret.yaml"
+      - "{{ project_root }}/k8s/postgres-pvc.yaml"
+      - "{{ project_root }}/k8s/postgres-deployment.yaml"
+      - "{{ project_root }}/k8s/postgres-service.yaml"
+      - "{{ project_root }}/k8s/backend-deployment.yaml"
+      - "{{ project_root }}/k8s/backend-service.yaml"
+      - "{{ project_root }}/k8s/frontend-deployment.yaml"
+      - "{{ project_root }}/k8s/frontend-service.yaml"
+      - "{{ project_root }}/k8s/backend-hpa.yaml"
+  tasks:
+    - name: Resolve backend build context
+      ansible.builtin.set_fact:
+        backend_context: "{{ item }}"
+      loop: "{{ backend_context_candidates }}"
+      when:
+        - backend_context is not defined
+        - lookup('ansible.builtin.fileglob', item ~ '/Dockerfile') | length > 0
+      tags: [build]
+
+    - name: Resolve frontend build context
+      ansible.builtin.set_fact:
+        frontend_context: "{{ item }}"
+      loop: "{{ frontend_context_candidates }}"
+      when:
+        - frontend_context is not defined
+        - lookup('ansible.builtin.fileglob', item ~ '/Dockerfile') | length > 0
+      tags: [build]
+
+    - name: Resolve nginx build context
+      ansible.builtin.set_fact:
+        nginx_context: "{{ item }}"
+      loop: "{{ nginx_context_candidates }}"
+      when:
+        - nginx_context is not defined
+        - lookup('ansible.builtin.fileglob', item ~ '/Dockerfile') | length > 0
+      tags: [build]
+
+    - name: Assert build contexts were resolved
+      ansible.builtin.assert:
+        that:
+          - backend_context is defined
+          - frontend_context is defined
+          - nginx_context is defined
+        fail_msg: "Could not resolve one or more Docker build contexts (backend/frontend/nginx)."
+      tags: [build]
+
+    - name: Build backend image with timestamp tag
+      ansible.builtin.command: "docker build -t {{ backend_image }}:{{ image_tag }} {{ backend_context }}"
+      tags: [build]
+
+    - name: Tag backend image as latest
+      ansible.builtin.command: "docker tag {{ backend_image }}:{{ image_tag }} {{ backend_image }}:latest"
+      tags: [build]
+
+    - name: Build frontend image with timestamp tag
+      ansible.builtin.command: "docker build -t {{ frontend_image }}:{{ image_tag }} {{ frontend_context }}"
+      tags: [build]
+
+    - name: Tag frontend image as latest
+      ansible.builtin.command: "docker tag {{ frontend_image }}:{{ image_tag }} {{ frontend_image }}:latest"
+      tags: [build]
+
+    - name: Build nginx image with timestamp tag
+      ansible.builtin.command: "docker build -t {{ nginx_image }}:{{ image_tag }} {{ nginx_context }}"
+      tags: [build]
+
+    - name: Tag nginx image as latest
+      ansible.builtin.command: "docker tag {{ nginx_image }}:{{ image_tag }} {{ nginx_image }}:latest"
+      tags: [build]
+
+    - name: Load backend image into Minikube
+      ansible.builtin.command: "minikube image load {{ backend_image }}:latest"
+      tags: [deploy]
+
+    - name: Load frontend image into Minikube
+      ansible.builtin.command: "minikube image load {{ frontend_image }}:latest"
+      tags: [deploy]
+
+    - name: Apply Kubernetes manifests
+      ansible.builtin.command: "kubectl apply -f {{ item }}"
+      loop: "{{ k8s_manifests }}"
+      tags: [deploy]
+
+    - name: Wait for backend rollout
+      ansible.builtin.command: kubectl rollout status deployment/backend -n urbanbank
+      tags: [health_check]
+
+    - name: Wait for frontend rollout
+      ansible.builtin.command: kubectl rollout status deployment/frontend -n urbanbank
+      tags: [health_check]
+
+    - name: Get frontend service URL
+      ansible.builtin.command: minikube service frontend --url -n urbanbank
+      register: frontend_service_url
+      changed_when: false
+      tags: [health_check]
+
+    - name: Show frontend service URL
+      ansible.builtin.debug:
+        msg: "Frontend URL: {{ frontend_service_url.stdout }}"
+      tags: [health_check]

@@ -1,0 +1,108 @@
+---
+- name: Setup monitoring stack on Minikube
+  hosts: local
+  gather_facts: no
+  vars:
+    monitoring_namespace: monitoring
+    prometheus_chart_repo_name: prometheus-community
+    prometheus_chart_repo_url: https://prometheus-community.github.io/helm-charts
+    prometheus_chart_name: kube-prometheus-stack
+    prometheus_release_name: kube-prometheus
+    grafana_chart_repo_name: grafana
+    grafana_chart_repo_url: https://grafana.github.io/helm-charts
+    grafana_chart_name: grafana
+    grafana_release_name: grafana
+    kubernetes_dashboard_id: 315
+  tasks:
+    - name: Create monitoring namespace
+      ansible.builtin.command: kubectl create namespace {{ monitoring_namespace }}
+      register: create_namespace
+      changed_when: "'created' in create_namespace.stdout"
+      failed_when: create_namespace.rc != 0 and 'AlreadyExists' not in create_namespace.stderr
+
+    - name: Add Prometheus Helm repo
+      ansible.builtin.command: helm repo add {{ prometheus_chart_repo_name }} {{ prometheus_chart_repo_url }}
+      changed_when: false
+
+    - name: Add Grafana Helm repo
+      ansible.builtin.command: helm repo add {{ grafana_chart_repo_name }} {{ grafana_chart_repo_url }}
+      changed_when: false
+
+    - name: Update Helm repos
+      ansible.builtin.command: helm repo update
+      changed_when: false
+
+    - name: Create or update Grafana admin secret
+      ansible.builtin.shell: >
+        kubectl create secret generic grafana-admin-credentials
+        -n {{ monitoring_namespace }}
+        --from-literal=admin-user={{ grafana_admin_user }}
+        --from-literal=admin-password={{ grafana_admin_password }}
+        --dry-run=client -o yaml | kubectl apply -f -
+      changed_when: false
+
+    - name: Install or upgrade Prometheus stack
+      ansible.builtin.command: >
+        helm upgrade --install {{ prometheus_release_name }}
+        {{ prometheus_chart_repo_name }}/{{ prometheus_chart_name }}
+        --namespace {{ monitoring_namespace }}
+        --version {{ prometheus_chart_version }}
+        --set prometheus.prometheusSpec.additionalScrapeConfigs[0].job_name=fastapi-metrics
+        --set prometheus.prometheusSpec.additionalScrapeConfigs[0].metrics_path=/metrics
+        --set prometheus.prometheusSpec.additionalScrapeConfigs[0].static_configs[0].targets[0]=backend-service.urbanbank.svc.cluster.local:8000
+      changed_when: false
+
+    - name: Install or upgrade Grafana
+      ansible.builtin.command: >
+        helm upgrade --install {{ grafana_release_name }}
+        {{ grafana_chart_repo_name }}/{{ grafana_chart_name }}
+        --namespace {{ monitoring_namespace }}
+        --version {{ grafana_chart_version }}
+        --set admin.existingSecret=grafana-admin-credentials
+        --set sidecar.dashboards.enabled=true
+        --set sidecar.dashboards.label=grafana_dashboard
+        --set dashboards.default.kubernetes-cluster-monitoring.gnetId={{ kubernetes_dashboard_id }}
+        --set dashboards.default.kubernetes-cluster-monitoring.revision=1
+        --set dashboards.default.kubernetes-cluster-monitoring.datasource=Prometheus
+      changed_when: false
+
+    - name: Apply custom FastAPI Grafana dashboard configmap
+      ansible.builtin.shell: |
+        cat <<'EOF' | kubectl apply -f -
+        apiVersion: v1
+        kind: ConfigMap
+        metadata:
+          name: fastapi-dashboard
+          namespace: {{ monitoring_namespace }}
+          labels:
+            grafana_dashboard: "1"
+        data:
+          fastapi-monitoring.json: |
+            {
+              "title": "FastAPI Monitoring",
+              "schemaVersion": 39,
+              "version": 1,
+              "refresh": "10s",
+              "panels": [
+                {
+                  "type": "timeseries",
+                  "title": "FastAPI Request Rate",
+                  "targets": [
+                    {
+                      "expr": "sum(rate(http_requests_total[1m]))",
+                      "legendFormat": "req/s"
+                    }
+                  ],
+                  "gridPos": {"h": 8, "w": 24, "x": 0, "y": 0}
+                }
+              ]
+            }
+        EOF
+      changed_when: false
+
+    - name: Show monitoring access hint
+      ansible.builtin.debug:
+        msg:
+          - "Prometheus and Grafana installed in namespace {{ monitoring_namespace }}."
+          - "Expose Grafana with: kubectl port-forward -n {{ monitoring_namespace }} svc/{{ grafana_release_name }} 3000:80"
+          - "Grafana admin user: {{ grafana_admin_user }}"

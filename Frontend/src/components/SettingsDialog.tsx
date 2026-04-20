@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -15,13 +15,60 @@ interface SettingsDialogProps {
   userRole: string;
 }
 
+interface NotificationPreferences {
+  criticalAlertsEnabled: boolean;
+  dailyDigestEnabled: boolean;
+}
+
+const getPreferencesStorageKey = (userEmail: string) => `urbanbank.notificationPreferences:${userEmail.toLowerCase()}`;
+
+const readNotificationPreferences = (userEmail: string): NotificationPreferences => {
+  if (!userEmail) {
+    return { criticalAlertsEnabled: true, dailyDigestEnabled: true };
+  }
+
+  const rawPreferences = localStorage.getItem(getPreferencesStorageKey(userEmail));
+  if (!rawPreferences) {
+    return { criticalAlertsEnabled: true, dailyDigestEnabled: true };
+  }
+
+  try {
+    const parsedPreferences = JSON.parse(rawPreferences) as Partial<NotificationPreferences>;
+    return {
+      criticalAlertsEnabled: parsedPreferences.criticalAlertsEnabled ?? true,
+      dailyDigestEnabled: parsedPreferences.dailyDigestEnabled ?? true,
+    };
+  } catch {
+    return { criticalAlertsEnabled: true, dailyDigestEnabled: true };
+  }
+};
+
+const writeNotificationPreferences = (userEmail: string, preferences: NotificationPreferences) => {
+  localStorage.setItem(getPreferencesStorageKey(userEmail), JSON.stringify(preferences));
+};
+
 export function SettingsDialog({ open, onOpenChange, userName, userEmail, userRole }: SettingsDialogProps) {
   const [criticalAlertsEnabled, setCriticalAlertsEnabled] = useState(true);
   const [dailyDigestEnabled, setDailyDigestEnabled] = useState(true);
 
+  useEffect(() => {
+    if (!open) {
+      return;
+    }
+
+    const savedPreferences = readNotificationPreferences(userEmail);
+    setCriticalAlertsEnabled(savedPreferences.criticalAlertsEnabled);
+    setDailyDigestEnabled(savedPreferences.dailyDigestEnabled);
+  }, [open, userEmail]);
+
   const handleSavePreferences = () => {
+    writeNotificationPreferences(userEmail, {
+      criticalAlertsEnabled,
+      dailyDigestEnabled,
+    });
+
     toast.success("Preferences updated", {
-      description: "Account preferences were saved successfully.",
+      description: "Notification preferences were saved successfully.",
       icon: <CheckCircle2 className="h-4 w-4 text-green-500" />
     });
     onOpenChange(false);

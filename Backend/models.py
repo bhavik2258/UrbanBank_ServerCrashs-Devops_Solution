@@ -18,6 +18,7 @@ class BranchStatus(str, Enum):
 class AlertType(str, Enum):
     service_down = "service_down"
     high_cpu = "high_cpu"
+    high_ram = "high_ram"
     disk_full = "disk_full"
 
 

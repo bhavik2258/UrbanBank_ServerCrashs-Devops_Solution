@@ -15,7 +15,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from sqlalchemy import select, text
 
-from crud import generate_branch_metric, seed_database
+from crud import auto_heal_critical_branches, generate_branch_metric, seed_database
 from database import Base, AsyncSessionLocal, engine
 from models import Branch
 from routers import alerts, branches, incidents, metrics
@@ -30,6 +30,7 @@ logger = logging.getLogger("urbanbank-backend")
 
 scheduler = AsyncIOScheduler(timezone="UTC")
 METRIC_COLLECTION_INTERVAL_SECONDS = int(os.getenv("METRIC_COLLECTION_INTERVAL_SECONDS", "120"))
+BRANCH_AUTO_HEAL_INTERVAL_SECONDS = int(os.getenv("BRANCH_AUTO_HEAL_INTERVAL_SECONDS", "60"))
 
 
 async def ensure_performance_indexes() -> None:
@@ -98,6 +99,20 @@ async def collect_branch_metrics() -> None:
         )
 
 
+async def auto_heal_failed_branches() -> None:
+    """Background job that auto-heals branches in critical state."""
+    async with AsyncSessionLocal() as session:
+        healed_count = await auto_heal_critical_branches(session)
+        if healed_count > 0:
+            logger.info("Auto-healed %s critical branches", healed_count)
+            await dashboard_updates.publish(
+                {
+                    "generated_at": datetime.now(timezone.utc).isoformat(),
+                    "auto_healed_branch_count": healed_count,
+                }
+            )
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     logger.info("Starting UrbanBank backend initialization")
@@ -124,6 +139,15 @@ async def lifespan(app: FastAPI):
         "interval",
         seconds=METRIC_COLLECTION_INTERVAL_SECONDS,
         id="branch-metric-collector",
+        replace_existing=True,
+        max_instances=1,
+        coalesce=True,
+    )
+    scheduler.add_job(
+        auto_heal_failed_branches,
+        "interval",
+        seconds=BRANCH_AUTO_HEAL_INTERVAL_SECONDS,
+        id="branch-auto-healer",
         replace_existing=True,
         max_instances=1,
         coalesce=True,
