@@ -22,7 +22,6 @@
           loop:
             - urbanbank-backend:latest
             - urbanbank-frontend:latest
-            - urbanbank-nginx:latest
           ignore_errors: yes
           when: remove_images | bool
 

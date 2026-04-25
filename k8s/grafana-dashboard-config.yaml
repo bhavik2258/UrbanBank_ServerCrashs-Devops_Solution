@@ -181,9 +181,9 @@ data:
           "fieldConfig": { "defaults": { "unit": "s" }, "overrides": [] },
           "gridPos": { "h": 8, "w": 8, "x": 0, "y": 40 },
           "id": 16,
-          "targets": [{ "expr": "histogram_quantile(0.95, rate(pg_stat_statement_duration_seconds_bucket[5m]))", "refId": "A" }],
-          "title": "Query Duration",
-          "type": "heatmap"
+          "targets": [{ "expr": "pg_stat_database_numbackends", "refId": "A" }],
+          "title": "Postgres Connections",
+          "type": "timeseries"
         },
         {
           "datasource": "Prometheus",

@@ -1,5 +1,7 @@
 from __future__ import annotations
 from datetime import datetime, timezone
+import logging
+from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import select
@@ -10,6 +12,7 @@ from models import Alert
 from schemas import AlertRead, AlertResolveResponse
 
 router = APIRouter(prefix="", tags=["alerts"])
+logger = logging.getLogger(__name__)
 
 
 @router.get("/alerts", response_model=list[AlertRead])
@@ -56,3 +59,9 @@ async def read_active_alerts(
 
     alerts = await get_active_alerts(db, branch_id)
     return alerts
+
+
+@router.post("/alerts/webhooks/grafana")
+async def receive_grafana_alert(payload: dict[str, Any]) -> dict[str, str]:
+    logger.warning("Received Grafana alert webhook payload: %s", payload)
+    return {"message": "Grafana alert received"}

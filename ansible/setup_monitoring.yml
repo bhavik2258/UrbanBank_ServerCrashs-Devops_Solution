@@ -49,7 +49,7 @@
         --version {{ prometheus_chart_version }}
         --set prometheus.prometheusSpec.additionalScrapeConfigs[0].job_name=fastapi-metrics
         --set prometheus.prometheusSpec.additionalScrapeConfigs[0].metrics_path=/metrics
-        --set prometheus.prometheusSpec.additionalScrapeConfigs[0].static_configs[0].targets[0]=backend-service.urbanbank.svc.cluster.local:8000
+        --set prometheus.prometheusSpec.additionalScrapeConfigs[0].static_configs[0].targets[0]=backend.urbanbank.svc.cluster.local:8000
       changed_when: false
 
     - name: Install or upgrade Grafana

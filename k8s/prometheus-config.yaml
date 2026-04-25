@@ -24,6 +24,11 @@ data:
           - targets: ['backend:8000']
         metrics_path: /metrics
 
+      - job_name: 'urbanbank-postgres'
+        static_configs:
+          - targets: ['postgres-exporter:9187']
+        metrics_path: /metrics
+
       - job_name: 'kubernetes-nodes'
         kubernetes_sd_configs:
           - role: node

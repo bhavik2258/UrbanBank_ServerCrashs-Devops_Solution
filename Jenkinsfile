@@ -1,7 +1,5 @@
 pipeline {
-    agent {
-        label 'docker-agent'
-    }
+    agent any
 
     options {
         timestamps()
@@ -12,21 +10,12 @@ pipeline {
         K8S_NAMESPACE = 'urbanbank'
         BACKEND_DIR = 'Backend'
         FRONTEND_DIR = 'Frontend'
-        NGINX_DIR = 'nginx'
     }
 
     stages {
         stage('Checkout') {
             steps {
                 checkout scm
-                sh '''
-                    if [[ ! -d "$NGINX_DIR" ]]; then
-                      echo "nginx directory not found; using Frontend context for nginx image build"
-                      echo "NGINX_DIR=Frontend" > .pipeline.env
-                    else
-                      echo "NGINX_DIR=$NGINX_DIR" > .pipeline.env
-                    fi
-                '''
             }
         }
 
@@ -34,7 +23,6 @@ pipeline {
             steps {
                 sh '''
                     set -e
-                    source .pipeline.env
                     cd "$BACKEND_DIR"
                     python -m pip install --upgrade pip
                     pip install -r requirements.txt ruff pytest
@@ -48,7 +36,6 @@ pipeline {
             steps {
                 sh '''
                     set -e
-                    source .pipeline.env
                     cd "$BACKEND_DIR"
                     ruff check .
                     cd ../"$FRONTEND_DIR"
@@ -61,7 +48,6 @@ pipeline {
             steps {
                 sh '''
                     set -e
-                    source .pipeline.env
                     cd "$BACKEND_DIR"
                     pytest -q || test $? -eq 5
                     cd ../"$FRONTEND_DIR"
@@ -74,10 +60,8 @@ pipeline {
             steps {
                 sh '''
                     set -e
-                    source .pipeline.env
                     docker build -t urbanbank-backend:${BUILD_NUMBER} ./$BACKEND_DIR
                     docker build -t urbanbank-frontend:${BUILD_NUMBER} ./$FRONTEND_DIR
-                    docker build -t urbanbank-nginx:${BUILD_NUMBER} ./$NGINX_DIR
                 '''
             }
         }
@@ -87,7 +71,6 @@ pipeline {
                 sh '''
                     docker tag urbanbank-backend:${BUILD_NUMBER} urbanbank-backend:latest
                     docker tag urbanbank-frontend:${BUILD_NUMBER} urbanbank-frontend:latest
-                    docker tag urbanbank-nginx:${BUILD_NUMBER} urbanbank-nginx:latest
                 '''
             }
         }
@@ -97,7 +80,6 @@ pipeline {
                 sh '''
                     minikube image load urbanbank-backend:${BUILD_NUMBER}
                     minikube image load urbanbank-frontend:${BUILD_NUMBER}
-                    minikube image load urbanbank-nginx:${BUILD_NUMBER}
                 '''
             }
         }

@@ -8,6 +8,8 @@ resources:
   - postgres-pvc.yaml
   - postgres-service.yaml
   - postgres-deployment.yaml
+  - postgres-exporter-service.yaml
+  - postgres-exporter-deployment.yaml
   - backend-service.yaml
   - backend-deployment.yaml
   - backend-hpa.yaml
@@ -23,6 +25,7 @@ resources:
   - prometheus-service.yaml
   - grafana-pvc.yaml
   - grafana-datasource-config.yaml
+  - grafana-alerting-config.yaml
   - grafana-dashboard-provider.yaml
   - grafana-dashboard-config.yaml
   - grafana-deployment.yaml
