@@ -24,8 +24,8 @@ pipeline {
                 sh '''
                     set -e
                     cd "$BACKEND_DIR"
-                    python -m pip install --upgrade pip
-                    pip install -r requirements.txt ruff pytest
+                    python3 -m pip install --upgrade pip
+                    pip3 install -r requirements.txt ruff pytest
                     cd ../"$FRONTEND_DIR"
                     npm install
                 '''
