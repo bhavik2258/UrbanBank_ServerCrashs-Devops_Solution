@@ -2,8 +2,8 @@ pipeline {
     agent any
 
     options {
-        timestamps()
-        ansiColor('xterm')
+        timeout(time: 1, unit: 'HOURS')
+        disableConcurrentBuilds()
     }
 
     environment {
