@@ -1,5 +1,9 @@
 name: CI/CD Pipeline
 
+permissions:
+  contents: read
+  packages: write
+
 on:
   push:
     branches: [ main ]
@@ -90,12 +94,12 @@ jobs:
       - name: Wait for Backend
         run: |
           echo "Waiting for backend..."
-          timeout 60 bash -c 'until curl -f http://localhost:8000/api/health; do sleep 2; done' || echo "⚠️ Backend timeout"
+          timeout 60 bash -c 'until curl -f http://localhost:8000/health; do sleep 2; done' || echo "⚠️ Backend timeout"
 
       - name: Wait for Frontend
         run: |
           echo "Waiting for frontend..."
-          timeout 30 bash -c 'until curl -f http://localhost; do sleep 2; done' || echo "⚠️ Frontend timeout"
+          timeout 30 bash -c 'until curl -f http://localhost:8080; do sleep 2; done' || echo "⚠️ Frontend timeout"
 
       - name: Test APIs
         run: |
@@ -114,11 +118,71 @@ jobs:
     needs: docker-build
     runs-on: ubuntu-latest
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    env:
+      REGISTRY: ghcr.io
+      IMAGE_OWNER: ${{ github.repository_owner }}
+      BACKEND_IMAGE_NAME: urbanbank-backend
+      FRONTEND_IMAGE_NAME: urbanbank-frontend
+      BACKEND_IMAGE: ghcr.io/${{ github.repository_owner }}/urbanbank-backend
+      FRONTEND_IMAGE: ghcr.io/${{ github.repository_owner }}/urbanbank-frontend
 
     steps:
       - uses: actions/checkout@v4
 
-      - name: Deploy
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push backend image
+        uses: docker/build-push-action@v6
+        with:
+          context: ./Backend
+          push: true
+          tags: |
+            ${{ env.BACKEND_IMAGE }}:latest
+            ${{ env.BACKEND_IMAGE }}:${{ github.sha }}
+
+      - name: Build and push frontend image
+        uses: docker/build-push-action@v6
+        with:
+          context: ./Frontend
+          push: true
+          tags: |
+            ${{ env.FRONTEND_IMAGE }}:latest
+            ${{ env.FRONTEND_IMAGE }}:${{ github.sha }}
+
+      - name: Set up kubectl
+        if: secrets.KUBE_CONFIG_DATA != ''
+        uses: azure/setup-kubectl@v4
+
+      - name: Configure kubeconfig
+        if: secrets.KUBE_CONFIG_DATA != ''
         run: |
-          echo "🚀 Deployment placeholder"
-          echo "Push images + deploy to server/K8s here"
+          mkdir -p "$HOME/.kube"
+          echo "${{ secrets.KUBE_CONFIG_DATA }}" | base64 -d > "$HOME/.kube/config"
+
+      - name: Deploy to Kubernetes
+        if: secrets.KUBE_CONFIG_DATA != ''
+        run: |
+          set -e
+          kubectl apply -k k8s
+          kubectl -n urbanbank set image deployment/backend backend=${BACKEND_IMAGE}:${GITHUB_SHA}
+          kubectl -n urbanbank set image deployment/frontend frontend=${FRONTEND_IMAGE}:${GITHUB_SHA}
+          kubectl -n urbanbank rollout status deployment/backend --timeout=240s
+          kubectl -n urbanbank rollout status deployment/frontend --timeout=240s
+
+      - name: Deployment summary
+        run: |
+          echo "Backend image: ${BACKEND_IMAGE}:${GITHUB_SHA}"
+          echo "Frontend image: ${FRONTEND_IMAGE}:${GITHUB_SHA}"
+          if [ -z "${{ secrets.KUBE_CONFIG_DATA }}" ]; then
+            echo "Kubernetes deploy skipped (missing KUBE_CONFIG_DATA secret)."
+          else
+            echo "Kubernetes deploy completed."
+          fi

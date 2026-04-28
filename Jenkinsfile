@@ -161,11 +161,7 @@ PY
         }
         always {
             archiveArtifacts artifacts: 'k8s/**/*.yaml,grafana/**/*.json,Frontend/dist/**', allowEmptyArchive: true, fingerprint: true
-            sh '''
-                docker image prune -f || true
-                docker images --format '{{.Repository}}:{{.Tag}}' | grep '^urbanbank-' | grep -v ':latest$' | grep -v ":${BUILD_NUMBER}$" | xargs -r docker rmi || true
-            '''
-            cleanWs()
+            deleteDir()
         }
     }
 }
