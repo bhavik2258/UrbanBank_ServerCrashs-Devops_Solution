@@ -17,9 +17,10 @@
 
 services:
   jenkins:
-    image: jenkins/jenkins:lts
+    build:
+      context: .
+      dockerfile: Dockerfile.jenkins
     container_name: jenkins-server
-    # Running as root is often required inside the container to access the docker socket
     user: root
     privileged: true
     ports:
@@ -33,13 +34,6 @@ services:
       - /var/run/docker.sock:/var/run/docker.sock
     networks:
       - jenkins_network
-    # Install docker, python, and nodejs inside Jenkins container
-    entrypoint: >
-      bash -c "
-      apt-get update &&
-      apt-get install -y docker.io python3 python3-pip nodejs npm &&
-      /usr/bin/tini -- /usr/local/bin/jenkins.sh
-      "
 
 networks:
   jenkins_network:

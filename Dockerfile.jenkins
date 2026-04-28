@@ -1,0 +1,20 @@
+FROM jenkins/jenkins:lts
+
+USER root
+
+# Install Docker CLI, Python, Node.js, and other required tools
+RUN apt-get update && apt-get install -y \
+    docker.io \
+    python3 \
+    python3-pip \
+    python3-venv \
+    nodejs \
+    npm \
+    git \
+    curl \
+    && rm -rf /var/lib/apt/lists/*
+
+# Add jenkins user to docker group to access docker socket
+RUN usermod -aG docker jenkins
+
+USER jenkins

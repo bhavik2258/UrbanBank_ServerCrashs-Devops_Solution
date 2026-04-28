@@ -24,8 +24,9 @@ pipeline {
                 sh '''
                     set -e
                     cd "$BACKEND_DIR"
-                    python3 -m pip install --upgrade pip
-                    pip3 install -r requirements.txt ruff pytest
+                    python3 -m venv .venv
+                    .venv/bin/pip install --upgrade pip
+                    .venv/bin/pip install -r requirements.txt ruff pytest
                     cd ../"$FRONTEND_DIR"
                     npm install
                 '''
@@ -37,7 +38,7 @@ pipeline {
                 sh '''
                     set -e
                     cd "$BACKEND_DIR"
-                    ruff check .
+                    .venv/bin/ruff check .
                     cd ../"$FRONTEND_DIR"
                     npm run lint
                 '''
@@ -49,7 +50,7 @@ pipeline {
                 sh '''
                     set -e
                     cd "$BACKEND_DIR"
-                    pytest -q || test $? -eq 5
+                    .venv/bin/pytest -q || test $? -eq 5
                     cd ../"$FRONTEND_DIR"
                     npm test
                 '''
