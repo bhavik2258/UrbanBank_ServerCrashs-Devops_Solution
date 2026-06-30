@@ -1,0 +1,34 @@
+graph TD
+  user[Users]
+  ingress[Ingress / Load Balancer]
+  fe[Frontend\nReact + Vite]
+  be[Backend\nFastAPI]
+  db[(Postgres)]
+  prometheus[Prometheus Server]
+  grafana[Grafana]
+  metrics[Exporter / `/metrics`]
+  jenkins[Jenkins CI]
+  registry[Container Registry]
+  k8s[Kubernetes Cluster]
+  docker[Docker Compose (local)]
+
+  user -->|HTTP/HTTPS| ingress
+  ingress -->|Routes traffic| k8s
+  k8s --> fe
+  k8s --> be
+  fe -->|REST API / Websockets| be
+  be -->|reads/writes| db
+  be -->|exposes metrics| metrics
+  metrics --> prometheus
+  prometheus --> grafana
+  grafana -->|Dashboards & Alerts| ops[Operators]
+
+  jenkins -->|builds images| registry
+  jenkins -->|deploys| k8s
+  registry -->|pull images| k8s
+
+  docker --> fe
+  docker --> be
+
+  classDef infra fill:#f9f,stroke:#333,stroke-width:1px;
+  class k8s,registry,jenkins,ingress infra;

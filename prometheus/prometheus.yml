@@ -9,7 +9,7 @@ scrape_configs:
   - job_name: "urbanbank-backend"
     metrics_path: /metrics
     static_configs:
-      - targets: ["backend:8000"]
+      - targets: ["backend:8000", "host.docker.internal:8000"]
 
   - job_name: "urbanbank-postgres"
     metrics_path: /metrics

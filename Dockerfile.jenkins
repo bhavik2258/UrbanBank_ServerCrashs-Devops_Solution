@@ -2,15 +2,19 @@ FROM jenkins/jenkins:lts
 
 USER root
 
-# Install Docker CLI, Python, Node.js, and other required tools
-RUN apt-get update && apt-get install -y \
-    docker.io \
-    python3 \
-    python3-pip \
-    nodejs \
-    npm \
-    git \
-    curl \
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends \
+        ca-certificates \
+        curl \
+        git \
+        nodejs \
+        npm \
+        python3 \
+        python3-venv \
     && rm -rf /var/lib/apt/lists/*
+
+RUN jenkins-plugin-cli --plugins workflow-aggregator git
+
+COPY jenkins/init.groovy.d/ /usr/share/jenkins/ref/init.groovy.d/
 
 USER jenkins
