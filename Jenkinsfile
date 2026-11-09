@@ -12,6 +12,7 @@ pipeline {
         FRONTEND_DIR = 'Frontend'
         REPORT_DIR = 'build-reports'
         VENV_DIR = '.venv'
+        JWT_SECRET_KEY = 'ci-only-jwt-secret-not-for-production'
     }
 
     stages {
