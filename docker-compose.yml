@@ -24,6 +24,10 @@ services:
       # Use "db" instead of "localhost" to resolve via Docker's internal DNS
       DATABASE_URL: postgresql+asyncpg://postgres:postgres@db:5432/urbanbank
       SECRET_KEY: ${SECRET_KEY:-change-me-in-production}
+      JWT_SECRET_KEY: ${JWT_SECRET_KEY:-change-me-in-production}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-admin123}
+      OPS_PASSWORD: ${OPS_PASSWORD:-ops123}
+      AUDITOR_PASSWORD: ${AUDITOR_PASSWORD:-audit123}
       LOG_LEVEL: INFO
     ports:
       - "8000:8000"

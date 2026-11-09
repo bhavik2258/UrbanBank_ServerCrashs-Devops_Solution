@@ -1,10 +1,11 @@
 import { useCallback, useEffect, useMemo, useState, useTransition } from "react";
 import { toast } from "sonner";
-import { Server, AlertTriangle, TrendingUp, Building2 } from "lucide-react";
+import { Server, AlertTriangle, TrendingUp, Building2, ShieldAlert } from "lucide-react";
 import BranchCard from "@/components/BranchCard";
 import { CardSkeleton } from "@/components/LoadingSkeleton";
 import {
   fetchBranches,
+  failBackendPod,
   getBankOpsKpis,
   getDashboardSummary,
   simulateFailure,
@@ -27,6 +28,7 @@ const Dashboard = () => {
   const [visibleBranchCount, setVisibleBranchCount] = useState(INITIAL_VISIBLE_BRANCHES);
   const [isSwitchingBank, startBankTransition] = useTransition();
   const canOperate = hasPermission("simulate_incident") && hasPermission("trigger_heal");
+  const canTestKubernetes = hasPermission("manage_kubernetes");
 
   const handleBankChange = useCallback((value: string) => {
     startBankTransition(() => {
@@ -129,6 +131,18 @@ const Dashboard = () => {
     void load();
   }, [canOperate, load]);
 
+  const handleBackendPodFailure = useCallback(async () => {
+    try {
+      const result = await failBackendPod();
+      toast.success("Kubernetes pod failure started", {
+        description: `${result.pod_name} was deleted. Kubernetes is creating a replacement.`,
+      });
+    } catch (error) {
+      const description = error instanceof Error ? error.message : "Unexpected Kubernetes error";
+      toast.error("Kubernetes failure test failed", { description });
+    }
+  }, []);
+
   const uniqueBanks = useMemo(
     () => Array.from(new Set(allBranches.map((branch) => branch.bank_name))).sort(),
     [allBranches]
@@ -196,6 +210,17 @@ const Dashboard = () => {
       {/* Summary Bar */}
       <h2 className="text-xl font-semibold tracking-tight">{selectedBank || "Global"} Infrastructure Overview</h2>
       {isSwitchingBank ? <p className="text-xs text-muted-foreground">Optimizing view update...</p> : null}
+      {canTestKubernetes ? (
+        <div className="flex items-center justify-between gap-4 rounded-lg border border-destructive/30 bg-destructive/5 p-4">
+          <div>
+            <p className="font-semibold">Kubernetes recovery test</p>
+            <p className="text-xs text-muted-foreground">Deletes one backend pod so the Deployment recreates it.</p>
+          </div>
+          <Button size="sm" variant="destructive" onClick={() => void handleBackendPodFailure()}>
+            <ShieldAlert className="mr-2 h-4 w-4" /> Fail backend pod
+          </Button>
+        </div>
+      ) : null}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         {loading
           ? Array.from({ length: 4 }).map((_, i) => (

@@ -5,19 +5,15 @@ export type Permission =
   | "trigger_heal"
   | "resolve_alert"
   | "export_incidents"
-  | "manage_account";
+  | "manage_account"
+  | "manage_kubernetes";
 
 export interface AuthSession {
   name: string;
   email: string;
   role: UserRole;
   roleLabel: string;
-}
-
-interface DirectoryUser {
-  password: string;
-  name: string;
-  role: UserRole;
+  accessToken: string;
 }
 
 export const AUTH_SESSION_KEY = "urbanbank.auth";
@@ -29,27 +25,9 @@ const ROLE_LABELS: Record<UserRole, string> = {
 };
 
 const ROLE_PERMISSIONS: Record<UserRole, Permission[]> = {
-  platform_admin: ["simulate_incident", "trigger_heal", "resolve_alert", "export_incidents", "manage_account"],
+  platform_admin: ["simulate_incident", "trigger_heal", "resolve_alert", "export_incidents", "manage_account", "manage_kubernetes"],
   operations_analyst: ["simulate_incident", "trigger_heal", "resolve_alert", "export_incidents", "manage_account"],
   auditor: [],
-};
-
-export const DIRECTORY: Record<string, DirectoryUser> = {
-  "admin@urbanbank.com": {
-    password: "admin123",
-    name: "UrbanBank Platform Admin",
-    role: "platform_admin",
-  },
-  "ops@urbanbank.com": {
-    password: "ops123",
-    name: "UrbanBank Operations Analyst",
-    role: "operations_analyst",
-  },
-  "auditor@urbanbank.com": {
-    password: "audit123",
-    name: "UrbanBank Compliance Auditor",
-    role: "auditor",
-  },
 };
 
 export function getRoleLabel(role: UserRole): string {
@@ -73,12 +51,13 @@ export function getSession(): AuthSession | null {
   }
 }
 
-export function setSession(user: { name: string; email: string; role: UserRole }): AuthSession {
+export function setSession(user: { name: string; email: string; role: UserRole; accessToken: string }): AuthSession {
   const session: AuthSession = {
     name: user.name,
     email: user.email,
     role: user.role,
     roleLabel: getRoleLabel(user.role),
+    accessToken: user.accessToken,
   };
 
   sessionStorage.setItem(AUTH_SESSION_KEY, JSON.stringify(session));
@@ -90,7 +69,11 @@ export function clearSession(): void {
 }
 
 export function isAuthenticated(): boolean {
-  return getSession() !== null;
+  return getSession()?.accessToken !== undefined;
+}
+
+export function getAccessToken(): string | null {
+  return getSession()?.accessToken ?? null;
 }
 
 export function hasPermission(permission: Permission): boolean {

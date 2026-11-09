@@ -19,7 +19,7 @@ from sqlalchemy import select, text
 from crud import auto_heal_critical_branches, generate_branch_metric, seed_database
 from database import Base, AsyncSessionLocal, engine
 from models import Branch
-from routers import alerts, branches, incidents, metrics
+from routers import alerts, auth, branches, incidents, metrics
 from prometheus_metrics import initialize_prometheus_metric_labels, refresh_active_incidents, refresh_branch_status_labels
 
 load_dotenv()
@@ -192,6 +192,7 @@ app.include_router(branches.router)
 app.include_router(metrics.router)
 app.include_router(alerts.router)
 app.include_router(incidents.router)
+app.include_router(auth.router)
 
 
 @app.get("/", tags=["root"])

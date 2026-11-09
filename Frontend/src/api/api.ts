@@ -1,5 +1,7 @@
 // Centralized API layer for UrbanBank backend integration.
 
+import { clearSession, getAccessToken } from "@/lib/auth";
+
 export interface BranchMetrics {
   cpu: number;
   ram: number;
@@ -163,15 +165,20 @@ interface DashboardStreamCallbacks {
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "/api";
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
+  const accessToken = getAccessToken();
   const response = await fetch(`${API_BASE_URL}${path}`, {
     ...init,
     headers: {
       "Content-Type": "application/json",
+      ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
       ...(init?.headers ?? {}),
     },
   });
 
   if (!response.ok) {
+    if (response.status === 401) {
+      clearSession();
+    }
     const text = await response.text();
     throw new Error(`API ${response.status} ${response.statusText}: ${text}`);
   }
@@ -181,6 +188,21 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   }
 
   return (await response.json()) as T;
+}
+
+export async function login(email: string, password: string): Promise<{
+  access_token: string;
+  user: { name: string; email: string; role: "platform_admin" | "operations_analyst" | "auditor" };
+}> {
+  const response = await fetch(`${API_BASE_URL}/auth/login`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ email, password }),
+  });
+  if (!response.ok) {
+    throw new Error("Invalid email or password");
+  }
+  return response.json();
 }
 
 function normalizeType(value: string): string {
@@ -351,8 +373,16 @@ export const triggerHeal = async (branchId: string): Promise<void> => {
   await request(`/simulate/heal/${id}`, { method: "POST" });
 };
 
+export const failBackendPod = async (): Promise<{ pod_name: string }> => {
+  return request<{ pod_name: string }>("/admin/kubernetes/fail-backend-pod", {
+    method: "POST",
+  });
+};
+
 export const subscribeDashboardUpdates = (callbacks: DashboardStreamCallbacks): (() => void) => {
-  const source = new EventSource(`${API_BASE_URL}/dashboard/stream`);
+  const token = getAccessToken();
+  const query = token ? `?access_token=${encodeURIComponent(token)}` : "";
+  const source = new EventSource(`${API_BASE_URL}/dashboard/stream${query}`);
   let closedByClient = false;
 
   source.addEventListener("connected", () => {

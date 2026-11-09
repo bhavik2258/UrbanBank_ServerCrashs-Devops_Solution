@@ -6,7 +6,8 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Activity, Lock } from "lucide-react";
 import { toast } from "sonner";
-import { DIRECTORY, isAuthenticated, setSession } from "@/lib/auth";
+import { login } from "@/api/api";
+import { isAuthenticated, setSession } from "@/lib/auth";
 
 export default function Login() {
   const [email, setEmail] = useState("");
@@ -20,34 +21,25 @@ export default function Login() {
     }
   }, [navigate]);
 
-  const handleLogin = (e: React.FormEvent) => {
+  const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
 
     const normalizedEmail = email.trim().toLowerCase();
-    const user = DIRECTORY[normalizedEmail];
-
-    window.setTimeout(() => {
-      if (!user || user.password !== password) {
-        setIsLoading(false);
-        toast.error("Invalid credentials", {
-          description: "Please check your email, password, and assigned role account.",
-        });
-        return;
-      }
-
-      setSession({
-        name: user.name,
-        email: normalizedEmail,
-        role: user.role,
-      });
-
+    try {
+      const response = await login(normalizedEmail, password);
+      setSession({ ...response.user, accessToken: response.access_token });
       setIsLoading(false);
       toast.success("Login successful", {
-        description: `Signed in as ${user.name}`,
+        description: `Signed in as ${response.user.name}`,
       });
       navigate("/", { replace: true });
-    }, 500);
+    } catch (error) {
+      setIsLoading(false);
+      toast.error("Invalid credentials", {
+        description: error instanceof Error ? error.message : "Unable to sign in",
+      });
+    }
   };
 
   return (
@@ -114,12 +106,6 @@ export default function Login() {
             </CardFooter>
           </form>
         </Card>
-        <div className="mt-4 rounded-lg border bg-card/70 p-3 text-xs text-muted-foreground">
-          <p className="font-medium text-foreground mb-1">Role Accounts</p>
-          <p>Admin: admin@urbanbank.com / admin123</p>
-          <p>Operations: ops@urbanbank.com / ops123</p>
-          <p>Auditor: auditor@urbanbank.com / audit123</p>
-        </div>
         <div className="text-center mt-8 text-xs text-muted-foreground">
           <p>© 2026 UrbanBank Infrastructure Team.</p>
           <p>Authorized access only. All actions are logged.</p>

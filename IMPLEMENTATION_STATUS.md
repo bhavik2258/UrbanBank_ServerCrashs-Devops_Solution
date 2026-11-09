@@ -46,6 +46,7 @@ Key endpoints implemented:
 - GET /branches/{branch_id}
 - POST /simulate/incident/{branch_id}
 - POST /simulate/heal/{branch_id}
+- POST /admin/kubernetes/fail-backend-pod (platform-admin recovery demonstration)
 
 ### 3.3 Metrics and dashboard APIs
 Implemented:
@@ -129,20 +130,28 @@ Implemented pages:
 
 ### 4.2 Auth and role model
 Implemented:
-- Session-based authentication stored in sessionStorage.
-- In-app directory users with predefined credentials.
+- Backend-issued JWT authentication with configurable expiration.
+- Server-side password verification using scrypt hashes or environment-managed passwords.
+- Bearer tokens attached to API requests; expired/invalid sessions are cleared.
 - Role labels and permission checks.
 - Roles:
   - platform_admin
   - operations_analyst
   - auditor (read-only)
 - Permission-gated actions for simulation/heal/export/manage-account paths.
+- Backend authorization for operator actions and Platform Admin Kubernetes pod deletion.
+
+Authentication configuration:
+- Set `JWT_SECRET_KEY` to a long random secret.
+- Set `ADMIN_PASSWORD`, `OPS_PASSWORD`, and `AUDITOR_PASSWORD` through deployment secrets.
+- Do not commit production credentials; the Kubernetes secret manifest contains development-only values that must be replaced before production.
 
 ### 4.3 Dashboard UX and data behavior
 Implemented:
 - Dashboard summary cards.
 - Bank selector and tenant-oriented branch filtering.
 - Branch card operations for simulate failure and trigger heal.
+- Platform Admin dashboard control that deletes one backend pod through the Kubernetes API; the Deployment recreates it.
 - Bank operations KPI cards.
 - Alert volume table by branch/severity.
 - Incremental branch rendering with Show More pagination behavior.

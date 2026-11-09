@@ -6,10 +6,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import aliased
 
 from database import get_db
+from auth import require_operator, require_platform_admin
 from models import Branch, Metric
 from schemas import (
     BranchRead,
     SimulationResponse,
+    PodFailureResponse,
 )
 
 router = APIRouter(prefix="", tags=["branches"])
@@ -119,7 +121,11 @@ async def read_branch(branch_id: int, db: AsyncSession = Depends(get_db)):
 
 
 @router.post("/simulate/incident/{branch_id}", response_model=SimulationResponse)
-async def simulate_incident(branch_id: int, db: AsyncSession = Depends(get_db)):
+async def simulate_incident(
+    branch_id: int,
+    db: AsyncSession = Depends(get_db),
+    _user: dict = Depends(require_operator),
+):
     from crud import get_branch, simulate_branch_failure
 
     branch = await get_branch(db, branch_id)
@@ -136,7 +142,11 @@ async def simulate_incident(branch_id: int, db: AsyncSession = Depends(get_db)):
     )
 
 @router.post("/simulate/heal/{branch_id}", response_model=SimulationResponse)
-async def simulate_heal(branch_id: int, db: AsyncSession = Depends(get_db)):
+async def simulate_heal(
+    branch_id: int,
+    db: AsyncSession = Depends(get_db),
+    _user: dict = Depends(require_operator),
+):
     from crud import get_branch, heal_branch
 
     branch = await get_branch(db, branch_id)
@@ -149,3 +159,50 @@ async def simulate_heal(branch_id: int, db: AsyncSession = Depends(get_db)):
         branch_id=branch_id,
         branch_status=branch.status,
     )
+
+
+@router.post("/admin/kubernetes/fail-backend-pod", response_model=PodFailureResponse)
+async def fail_backend_pod(
+    _user: dict = Depends(require_platform_admin),
+) -> PodFailureResponse:
+    try:
+        from kubernetes import client, config
+        from kubernetes.client.rest import ApiException
+
+        try:
+            config.load_incluster_config()
+        except config.ConfigException:
+            config.load_kube_config()
+
+        core_api = client.CoreV1Api()
+        pods = core_api.list_namespaced_pod(
+            namespace="urbanbank",
+            label_selector="app=backend",
+        ).items
+        running_pods = [pod for pod in pods if pod.status.phase == "Running"]
+        if not running_pods:
+            raise HTTPException(status_code=409, detail="No running backend pod is available")
+
+        pod_name = running_pods[0].metadata.name
+        core_api.delete_namespaced_pod(
+            name=pod_name,
+            namespace="urbanbank",
+            grace_period_seconds=0,
+        )
+        return PodFailureResponse(
+            message="Backend pod deleted; Kubernetes Deployment will create a replacement",
+            pod_name=pod_name,
+            replacement_expected=True,
+        )
+    except HTTPException:
+        raise
+    except ApiException as error:
+        raise HTTPException(
+            status_code=502,
+            detail=f"Kubernetes API rejected the pod failure test: {error.reason}",
+        ) from error
+    except Exception as error:
+        raise HTTPException(
+            status_code=503,
+            detail="Kubernetes control is unavailable from this backend",
+        ) from error

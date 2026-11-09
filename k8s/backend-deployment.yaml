@@ -15,6 +15,7 @@ spec:
       labels:
         app: backend
     spec:
+      serviceAccountName: backend
       containers:
         - name: backend
           image: urbanbank-backend:latest
@@ -42,6 +43,26 @@ spec:
                 configMapKeyRef:
                   name: urbanbank-config
                   key: DATABASE_NAME
+            - name: JWT_SECRET_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: urbanbank-secrets
+                  key: JWT_SECRET_KEY
+            - name: ADMIN_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: urbanbank-secrets
+                  key: ADMIN_PASSWORD
+            - name: OPS_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: urbanbank-secrets
+                  key: OPS_PASSWORD
+            - name: AUDITOR_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: urbanbank-secrets
+                  key: AUDITOR_PASSWORD
             - name: METRIC_COLLECTION_INTERVAL_SECONDS
               valueFrom:
                 configMapKeyRef:

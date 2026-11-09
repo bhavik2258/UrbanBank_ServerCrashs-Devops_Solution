@@ -8,6 +8,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from database import get_db
+from auth import require_operator
 from models import Alert
 from schemas import AlertRead, AlertResolveResponse
 
@@ -31,7 +32,11 @@ async def read_alerts(
 
 
 @router.patch("/alerts/{alert_id}/resolve", response_model=AlertResolveResponse)
-async def resolve_alert_route(alert_id: int, db: AsyncSession = Depends(get_db)):
+async def resolve_alert_route(
+    alert_id: int,
+    db: AsyncSession = Depends(get_db),
+    _user: dict = Depends(require_operator),
+):
     result = await db.execute(select(Alert).where(Alert.id == alert_id))
     alert = result.scalar_one_or_none()
     if alert is None:

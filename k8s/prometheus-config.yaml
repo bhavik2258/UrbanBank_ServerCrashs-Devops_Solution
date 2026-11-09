@@ -28,12 +28,3 @@ data:
         static_configs:
           - targets: ['postgres-exporter:9187']
         metrics_path: /metrics
-
-      - job_name: 'kubernetes-nodes'
-        kubernetes_sd_configs:
-          - role: node
-
-      - job_name: 'kubernetes-cadvisor'
-        kubernetes_sd_configs:
-          - role: node
-        metrics_path: /metrics/cadvisor

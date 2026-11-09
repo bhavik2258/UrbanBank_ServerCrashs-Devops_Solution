@@ -116,6 +116,12 @@ class DashboardSummary(BaseModel):
     avg_uptime_percent: float
 
 
+class PodFailureResponse(BaseModel):
+    message: str
+    pod_name: str
+    replacement_expected: bool
+
+
 class AlertVolumeByBranch(BaseModel):
     branch_id: int
     branch_name: str

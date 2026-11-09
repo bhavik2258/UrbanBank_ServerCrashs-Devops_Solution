@@ -11,6 +11,7 @@ resources:
   - postgres-exporter-service.yaml
   - postgres-exporter-deployment.yaml
   - backend-service.yaml
+  - backend-rbac.yaml
   - backend-deployment.yaml
   - backend-hpa.yaml
   - backend-pdb.yaml
@@ -20,6 +21,7 @@ resources:
   - postgres-pdb.yaml
   - ingress.yaml
   - prometheus-config.yaml
+  - prometheus-rbac.yaml
   - prometheus-pvc.yaml
   - prometheus-deployment.yaml
   - prometheus-service.yaml
