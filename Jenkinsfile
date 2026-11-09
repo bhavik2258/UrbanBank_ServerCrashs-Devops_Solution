@@ -11,9 +11,6 @@ pipeline {
         BACKEND_DIR = 'Backend'
         FRONTEND_DIR = 'Frontend'
         REPORT_DIR = 'build-reports'
-        SONAR_HOST_URL = 'http://sonarqube:9000'
-        SONAR_PROJECT_KEY = 'urbanbank'
-        SONAR_SCANNER_NPM_PACKAGE = '@sonar/scan@4.3.5'
         VENV_DIR = '.venv'
     }
 
@@ -57,6 +54,7 @@ pipeline {
                     . "$VENV_DIR/bin/activate"
                     python -m pip install --upgrade pip
                     python -m pip install -r "$BACKEND_DIR/requirements.txt"
+                    python -m pip install 'sqlalchemy[asyncio]>=2.0.32'
                 '''
             }
         }
@@ -117,48 +115,6 @@ pipeline {
             }
         }
 
-        stage('SonarQube Scan') {
-            steps {
-                sh '''
-                    set +e
-                    mkdir -p "$REPORT_DIR"
-
-                    if [ -z "${SONAR_TOKEN:-}" ]; then
-                        echo "SonarQube scan: skipped because SONAR_TOKEN is not configured" | tee "$REPORT_DIR/sonarqube-scan.txt"
-                        echo "SonarQube scan: skipped" >> "$REPORT_DIR/pipeline-summary.txt"
-                        exit 0
-                    fi
-
-                    if ! curl -fsS --max-time 10 "$SONAR_HOST_URL/api/system/status" > "$REPORT_DIR/sonarqube-status.json"; then
-                        echo "SonarQube scan: skipped because $SONAR_HOST_URL is not reachable yet" | tee "$REPORT_DIR/sonarqube-scan.txt"
-                        echo "SonarQube scan: SonarQube not reachable" >> "$REPORT_DIR/pipeline-summary.txt"
-                        exit 0
-                    fi
-
-                    if [ ! -f sonar-project.properties ]; then
-                        {
-                            echo "sonar.projectKey=$SONAR_PROJECT_KEY"
-                            echo "sonar.projectName=UrbanBank"
-                            echo "sonar.sources=$BACKEND_DIR,$FRONTEND_DIR/src"
-                            echo "sonar.exclusions=$FRONTEND_DIR/node_modules/**,$FRONTEND_DIR/dist/**,**/__pycache__/**,**/.venv/**,**/.pytest_cache/**,**/.ruff_cache/**"
-                            echo "sonar.sourceEncoding=UTF-8"
-                        } > sonar-project.properties
-                    fi
-
-                    npx --yes --package "$SONAR_SCANNER_NPM_PACKAGE" sonar-scanner > "$REPORT_DIR/sonarqube-scan.txt" 2>&1
-                    scan_status=$?
-
-                    if [ "$scan_status" -eq 0 ]; then
-                        echo "SonarQube scan: completed" | tee -a "$REPORT_DIR/pipeline-summary.txt"
-                    else
-                        echo "SonarQube scan: failed; build kept green for this lightweight pipeline" | tee -a "$REPORT_DIR/pipeline-summary.txt"
-                    fi
-
-                    exit 0
-                '''
-            }
-        }
-
         stage('Package Report') {
             steps {
                 sh '''
@@ -184,7 +140,7 @@ pipeline {
             echo "FAILURE: UrbanBank lightweight CI #${BUILD_NUMBER}"
         }
         always {
-            archiveArtifacts artifacts: 'build-reports/**,Frontend/dist/**,.scannerwork/report-task.txt', allowEmptyArchive: true, fingerprint: true
+            archiveArtifacts artifacts: 'build-reports/**,Frontend/dist/**', allowEmptyArchive: true, fingerprint: true
         }
     }
 }

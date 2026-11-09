@@ -3,15 +3,12 @@
 BACKEND_PORT=8000
 FRONTEND_PORT=5173
 JENKINS_PORT=8080
-SONARQUBE_PORT=9000
 export JENKINS_ADMIN_USERNAME=${JENKINS_ADMIN_USERNAME:-urbanbank-admin}
 export JENKINS_ADMIN_PASSWORD=${JENKINS_ADMIN_PASSWORD:-UrbanBankJenkins2026!}
 JENKINS_COMPOSE_FILE=docker-compose.jenkins.yml
 JENKINS_STARTED_BY_SCRIPT=false
-SONARQUBE_STARTED_BY_SCRIPT=false
 START_MONITORING=${START_MONITORING:-false}
 START_JENKINS=${START_JENKINS:-false}
-START_SONARQUBE=${START_SONARQUBE:-false}
 START_MINIKUBE_FOR_JENKINS=${START_MINIKUBE_FOR_JENKINS:-false}
 
 port_is_listening() {
@@ -30,10 +27,6 @@ http_is_responding() {
 
 jenkins_container_is_running() {
     docker compose -f "${JENKINS_COMPOSE_FILE}" ps --status running --services 2>/dev/null | grep -qx jenkins
-}
-
-sonarqube_container_is_running() {
-    docker compose -f "${JENKINS_COMPOSE_FILE}" ps --status running --services 2>/dev/null | grep -qx sonarqube
 }
 
 minikube_is_running() {
@@ -73,22 +66,6 @@ if [[ "${START_MONITORING}" == "true" ]]; then
     docker compose --profile monitoring up -d postgres-exporter prometheus grafana
 else
     echo "ℹ️ Skipping Prometheus/Grafana. Set START_MONITORING=true to start them."
-fi
-
-if [[ "${START_SONARQUBE}" == "true" ]]; then
-    echo "🔎 Starting SonarQube via Docker..."
-    if sonarqube_container_is_running; then
-        echo "ℹ️ SonarQube is already running; reusing it."
-    elif port_is_listening "${SONARQUBE_PORT}"; then
-        echo "⚠️ Port ${SONARQUBE_PORT} is already in use, so SonarQube cannot start there."
-        echo "   Stop the process using that port before rerunning."
-        exit 1
-    else
-        docker compose -f "${JENKINS_COMPOSE_FILE}" up -d sonarqube
-        SONARQUBE_STARTED_BY_SCRIPT=true
-    fi
-else
-    echo "ℹ️ Skipping SonarQube. Set START_SONARQUBE=true to start it."
 fi
 
 if [[ "${START_JENKINS}" == "true" ]]; then
@@ -152,10 +129,6 @@ cleanup() {
         echo "🛑 Stopping Jenkins CI/CD container..."
         docker compose -f "${JENKINS_COMPOSE_FILE}" stop jenkins
     fi
-    if [[ "${SONARQUBE_STARTED_BY_SCRIPT}" == "true" ]]; then
-        echo "🛑 Stopping SonarQube containers..."
-        docker compose -f "${JENKINS_COMPOSE_FILE}" stop sonarqube sonarqube-db
-    fi
     echo "👋 All stopped. Goodbye!"
     exit
 }
@@ -171,10 +144,6 @@ echo "   - Database: localhost:5432"
 if [[ "${START_JENKINS}" == "true" ]]; then
     echo "   - Jenkins CI/CD: http://localhost:${JENKINS_PORT}"
     echo "   - Jenkins login: ${JENKINS_ADMIN_USERNAME} / ${JENKINS_ADMIN_PASSWORD}"
-fi
-if [[ "${START_SONARQUBE}" == "true" ]]; then
-    echo "   - SonarQube: http://localhost:${SONARQUBE_PORT}"
-    echo "   - SonarQube login: admin / admin"
 fi
 if [[ "${START_MONITORING}" == "true" ]]; then
     echo "   - Prometheus: http://localhost:9090"

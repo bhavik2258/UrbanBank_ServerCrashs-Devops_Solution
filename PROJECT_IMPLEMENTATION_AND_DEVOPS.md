@@ -128,22 +128,16 @@ The repo includes CI/CD and automation assets for building, testing, deploying, 
 - Jenkins pipeline with lint, test, build, deploy, health-check, and metrics-verification stages.
 - Docker image build and tag flow.
 - Kubernetes deployment and rollout validation.
-- Ansible playbooks for setup, deployment, monitoring, rollback, and teardown.
 
 Relevant files:
 
 - [Jenkinsfile](Jenkinsfile)
-- [ansible/setup_infrastructure.yml](ansible/setup_infrastructure.yml)
-- [ansible/deploy_app.yml](ansible/deploy_app.yml)
-- [ansible/setup_monitoring.yml](ansible/setup_monitoring.yml)
-- [ansible/rollback.yml](ansible/rollback.yml)
-- [ansible/teardown.yml](ansible/teardown.yml)
 
 ## 2. DevOps Concepts Explained Using This Project
 
 ### 2.1 DevOps in plain terms
 
-DevOps is the practice of connecting software development and operations so that software can be built, tested, deployed, observed, and recovered in a repeatable way. In this repository, DevOps is not just a diagram or a slogan; it is implemented through Docker, Kubernetes, Jenkins, Ansible, Prometheus, and Grafana.
+DevOps is the practice of connecting software development and operations so that software can be built, tested, deployed, observed, and recovered in a repeatable way. In this repository, DevOps is implemented through Docker, Kubernetes, Jenkins, Prometheus, and Grafana.
 
 The main goal is to reduce the gap between code and production-like operations:
 
@@ -160,7 +154,6 @@ How it appears here:
 
 - Docker Compose defines local services in [docker-compose.yml](docker-compose.yml).
 - Kubernetes resources are declared in [k8s/](k8s).
-- Ansible playbooks describe setup and deployment workflows in [ansible/](ansible).
 - Prometheus and Grafana are configured from versioned files in [prometheus/](prometheus) and [grafana/](grafana).
 
 Why it matters:
@@ -420,7 +413,6 @@ Rollback is the ability to return to a previous working state after a bad deploy
 
 How it appears here:
 
-- The repository includes [ansible/rollback.yml](ansible/rollback.yml).
 - The Jenkins pipeline verifies rollouts and health after deployment.
 - The deployment files are versioned, so changes can be reverted in Git.
 
@@ -506,11 +498,9 @@ Used to automate build, test, deploy, and verify steps.
 
 - [Jenkinsfile](Jenkinsfile)
 
-### 3.5 Ansible automation
 
 Used to automate infrastructure setup, app deployment, monitoring setup, rollback, and teardown.
 
-- [ansible/](ansible)
 
 ### 3.6 Monitoring stack
 

@@ -5,14 +5,14 @@ Last updated: 2026-04-27
 ## 1. Scope of this document
 This file captures what is currently implemented in the UrbanBank codebase across:
 - Application features (backend + frontend)
-- Platform and DevOps tooling (Docker, Kubernetes, CI/CD, Ansible, monitoring)
+- Platform and DevOps tooling (Docker, Kubernetes, CI/CD, monitoring)
 
 ## 2. Current architecture
 - Frontend: React + TypeScript + Vite, served by Nginx in containerized environments.
 - Backend: FastAPI + SQLAlchemy (async) + PostgreSQL.
 - Observability: Prometheus + Grafana + Prometheus exporter for PostgreSQL.
 - Deploy targets: Docker Compose (local stack) and Kubernetes (Minikube-oriented manifests).
-- Automation: Jenkins pipeline and Ansible playbooks.
+- Automation: Jenkins pipeline.
 
 ## 3. Application implementation (Backend)
 
@@ -165,7 +165,6 @@ Implemented:
 - Incidents page with:
   - Search/filter
   - Auto-heal status badges
-  - Ansible action visibility
   - CSV export interaction (permission-gated UI path)
 
 ### 4.6 Account settings UX
@@ -234,7 +233,6 @@ Post actions implemented:
 Also present:
 - Dedicated Jenkins + DinD docker compose setup for local Jenkins environment.
 
-### 5.6 Ansible automation
 Implemented playbooks:
 - setup_infrastructure.yml
   - Installs required packages
@@ -329,7 +327,6 @@ Current status note:
   - docker-compose.jenkins.yml
   - Jenkinsfile
   - start-dev.sh
-  - ansible/*.yml
   - k8s/*.yaml
   - prometheus/prometheus.yml
   - grafana/urbanbank-dashboard.json

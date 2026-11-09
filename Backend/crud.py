@@ -425,7 +425,7 @@ async def simulate_branch_failure(session: AsyncSession, branch: Branch) -> tupl
         "alert_id": alert.id,
         "description": "core-banking service crashed and requires auto-heal",
         "auto_healed": False,
-        "heal_action": "Queued for Ansible auto-heal restart",
+        "heal_action": "Queued for automatic recovery",
     })
 
     await ensure_branch_state(session, branch)
@@ -457,7 +457,7 @@ async def heal_branch(session: AsyncSession, branch: Branch) -> tuple[Metric, Al
     
     resolved_incident = None
     for open_incident in open_incidents.scalars().all():
-        open_incident.heal_action = "Restarted core-banking-svc via Ansible auto-heal"
+        open_incident.heal_action = "Restarted core-banking-svc via automatic recovery"
         session.add(open_incident)
         resolved_incident = await resolve_incident(session, open_incident, auto_healed=True)
         

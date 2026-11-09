@@ -100,7 +100,7 @@ const Incidents = () => {
                     <th className="p-3 w-[150px]">Branch</th>
                     <th className="p-3 w-[250px]">Description</th>
                     <th className="p-3 w-[150px]">Remediation</th>
-                    <th className="p-3">Ansible Action</th>
+                    <th className="p-3">Recovery Action</th>
                     <th className="p-3 w-[100px]">Downtime</th>
                     <th className="p-3 w-[150px]">Timeline</th>
                   </tr>
@@ -131,7 +131,7 @@ const Incidents = () => {
                         )}
                       </td>
                       <td className="p-3 text-xs text-muted-foreground font-mono bg-muted/30 rounded">
-                        {!inc.endTime ? "Queued for Ansible auto-heal restart" : (inc.healAction || "Pending Ansible Plan")}
+                        {!inc.endTime ? "Queued for automatic recovery" : (inc.healAction || "Pending recovery action")}
                       </td>
                       <td className="p-3 text-xs font-mono">{inc.duration}</td>
                       <td className="p-3 text-[11px] text-muted-foreground">
